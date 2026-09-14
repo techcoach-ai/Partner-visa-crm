@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { DisclaimerFooter } from '@/components/disclaimer';
-import { VISA, FEE_AUD_FORMATTED } from '@/lib/visa-data';
+import { VISA, FEE_AUD_FORMATTED, CHECKLIST_ITEM_COUNT } from '@/lib/visa-data';
 
 export default async function LandingPage() {
   const supabase = createClient();
@@ -58,7 +58,7 @@ export default async function LandingPage() {
           {[
             {
               icon: CheckCircle2,
-              title: '42-point checklist',
+              title: `${CHECKLIST_ITEM_COUNT}-point checklist`,
               body: 'Every requirement across eligibility, identity, the four pillars, statements, sponsorship, health, character and lodgement.',
             },
             {

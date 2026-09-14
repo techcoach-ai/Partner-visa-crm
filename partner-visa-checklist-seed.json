@@ -8,9 +8,9 @@
     "fee_note": "As of July 2026. Non-refundable even if refused or withdrawn. Verify current fee at immi.homeaffairs.gov.au before lodging.",
     "lodgement": "Online only via ImmiAccount. One combined application covers both 309 and 100.",
     "key_rules": [
-      "Applicant must be OUTSIDE Australia when the 309 is lodged and when it is granted.",
-      "There is no bridging visa. A 309 application gives no right to be in Australia while it is processed — the applicant may visit on a separate visitor visa, but must be outside Australia when the visa is granted.",
-      "De facto: 12 months living together immediately before applying, OR compelling and compassionate circumstances. Registering the relationship under an Australian state or territory law generally does NOT waive the 12 months for an offshore application.",
+      "Applicant must be outside Australia when the 309 is lodged AND when it is granted. They may visit Australia on a separate visitor visa during processing, but must depart before the visa is decided.",
+      "No bridging visa — offshore applicants have no automatic right to be in or stay in Australia while the application is processed.",
+      "De facto: 12 months living together immediately before applying, OR a child of the relationship. (Relationship registration usually can't waive the 12 months for offshore couples, as Australian state/territory registers generally require local residency — rely on 12 months cohabitation or compelling/compassionate circumstances instead.)",
       "April 2026 change: lodge 'decision-ready'. Include all documents up front; expect limited/no follow-up requests; incomplete applications risk faster refusal.",
       "Both applicant and sponsor must provide police clearances for every country lived in 12+ months since age 16.",
       "Do NOT book the health examination until instructed via ImmiAccount after lodgement."
@@ -110,31 +110,23 @@
       "applies_to": "couple",
       "required": true,
       "form_reference": null,
-      "guidance": "12 months living together immediately before applying, OR compelling and compassionate circumstances. Record which one you rely on. Note that an Australian state or territory relationship registration generally does not waive the 12 months for an offshore application."
+      "guidance": "12 months cohabitation immediately before applying, OR a child of the relationship, OR compelling/compassionate circumstances. Registration usually can't waive the 12 months for offshore couples. Record which one you rely on."
     },
     {
       "category_key": "eligibility",
-      "title": "Compelling and compassionate circumstances (if relied on)",
-      "applies_to": "couple",
-      "required": false,
-      "form_reference": null,
-      "guidance": "Only if you cannot show 12 months of living together immediately before applying. Registration under an Australian state or territory law generally does not waive the 12 months for an offshore application."
-    },
-    {
-      "category_key": "eligibility",
-      "title": "Applicant is outside Australia at lodgement and at grant",
+      "title": "Applicant is outside Australia at time of application",
       "applies_to": "applicant",
       "required": true,
       "form_reference": null,
-      "guidance": "The 309 is an offshore visa: the applicant must be outside Australia when the application is lodged AND when it is granted. Record where the applicant is living and their status there."
+      "guidance": "The 309 must be lodged while the applicant is offshore. Note current country of residence."
     },
     {
       "category_key": "eligibility",
-      "title": "No bridging visa — plan the time outside Australia",
+      "title": "Applicant will be outside Australia when the visa is granted",
       "applies_to": "applicant",
       "required": true,
       "form_reference": null,
-      "guidance": "A 309 application does not grant any right to be in Australia while it is processed, and no bridging visa is issued. The applicant may visit on a separate visitor visa, but must be outside Australia when the visa is granted. Plan travel, work and housing around this."
+      "guidance": "For the 309, the applicant must be offshore at the moment of grant. If visiting Australia during processing, plan to depart before a decision is expected."
     },
     {
       "category_key": "eligibility",
@@ -382,7 +374,7 @@
       "applies_to": "applicant",
       "required": true,
       "form_reference": null,
-      "guidance": "Do NOT book before lodging. Complete with a DHA-approved panel physician in the country where the applicant is living, once instructed through ImmiAccount."
+      "guidance": "Do NOT book before lodging. Complete with a DHA-approved panel physician — normally in the country where the applicant is living. If the applicant happens to be visiting Australia when instructed, Bupa Medical Visa Services handles these in Australia. Book only once instructed through ImmiAccount."
     },
     {
       "category_key": "character",

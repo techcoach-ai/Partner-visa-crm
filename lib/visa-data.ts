@@ -26,6 +26,10 @@ export const DISCLAIMER = VISA.disclaimer;
 /** Bumped only when the disclaimer wording changes; recorded at signup. */
 export const DISCLAIMER_VERSION = '2026-09-13';
 
+/** Derived from the seed so copy can't drift when the checklist changes. */
+export const CHECKLIST_ITEM_COUNT = seed.items.length;
+export const CHECKLIST_CATEGORY_COUNT = seed.categories.length;
+
 export const FEE_AUD_FORMATTED = new Intl.NumberFormat('en-AU', {
   style: 'currency',
   currency: 'AUD',

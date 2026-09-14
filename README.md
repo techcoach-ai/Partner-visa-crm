@@ -26,13 +26,13 @@ In the Supabase SQL editor, run in order:
 1. `schema.sql` — tables, enums, RLS policies, the private `visa-documents`
    bucket and its owner-scoped storage policy, the `profiles` table and its
    signup trigger, indexes, and `seed_application_items()`.
-2. `seed.sql` — the 12 checklist categories and 42 items. Idempotent.
-
-If you seeded this database before 2026-09-14, also run
-`migrations/2026-09-14-offshore-309-100.sql`. `seed.sql` only inserts items
-whose title is absent, so re-running it will not rewrite the items that changed
-when the app moved from the onshore 820/801 to the offshore 309/100 — it would
-add the new ones alongside the old.
+2. `seed.sql` — the 12 checklist categories and 41 items. Idempotent.
+3. If this database was seeded with any earlier version of `seed.sql`, run
+   `migrations/2026-09-14-offshore-309-100.sql` third. `seed.sql` only inserts
+   items whose title is absent, so re-running it will not rewrite items that
+   changed — it would add the new ones alongside the stale ones. The migration
+   reconciles them by renaming in place, so checklist statuses and uploaded
+   documents survive. It is idempotent and a no-op on a current database.
 
 Then under **Authentication → URL Configuration**, set the Site URL and add your
 deployed domains to the redirect allow-list.

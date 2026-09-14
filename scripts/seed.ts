@@ -83,7 +83,7 @@ async function main() {
     .filter((item) => !seen.has(`${item.category_id}::${item.title}`));
 
   if (toInsert.length === 0) {
-    console.log('All 42 items already present — nothing to insert.');
+    console.log(`All ${seed.items.length} items already present — nothing to insert.`);
   } else {
     const { error: itemError } = await supabase.from('checklist_items').insert(toInsert);
     if (itemError) throw new Error(`Items failed: ${itemError.message}`);

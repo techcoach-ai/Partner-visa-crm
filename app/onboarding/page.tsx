@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { getApplication, requireUser } from '@/lib/queries';
 import { OnboardingForm } from './onboarding-form';
 import { DisclaimerFooter } from '@/components/disclaimer';
-import { VISA } from '@/lib/visa-data';
+import { VISA, CHECKLIST_ITEM_COUNT, CHECKLIST_CATEGORY_COUNT } from '@/lib/visa-data';
 
 export const metadata: Metadata = { title: 'Get started — Partner Visa CRM' };
 
@@ -20,7 +20,8 @@ export default async function OnboardingPage() {
         </p>
         <h1 className="mt-2 text-2xl font-bold tracking-tight">Set up your application</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          This creates your checklist — 42 requirements across 12 categories. You can change
+          This creates your checklist — {CHECKLIST_ITEM_COUNT} requirements across{' '}
+          {CHECKLIST_CATEGORY_COUNT} categories. You can change
           any of this later.
         </p>
         <OnboardingForm />
