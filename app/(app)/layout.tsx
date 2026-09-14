@@ -3,6 +3,7 @@ import { requireUser, getApplication } from '@/lib/queries';
 import { DisclaimerFooter } from '@/components/disclaimer';
 import { AppSidebar } from '@/components/app-sidebar';
 import { CryptoProvider } from '@/components/crypto-provider';
+import { EncryptionIndicator } from '@/components/encryption-indicator';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { VISA } from '@/lib/visa-data';
 
@@ -25,6 +26,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <span className="text-sm text-muted-foreground">
               Subclass {application?.subclass ?? VISA.subclass} — offshore, de facto
             </span>
+            <div className="ml-auto">
+              <EncryptionIndicator />
+            </div>
           </header>
 
           <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">{children}</main>

@@ -3,6 +3,7 @@ import { requireUser, getApplication } from '@/lib/queries';
 import { createClient } from '@/lib/supabase/server';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DeleteAccount } from './delete-account';
+import { SecuritySettings } from './security-settings';
 
 export const metadata: Metadata = { title: 'Settings — Partner Visa CRM' };
 
@@ -53,6 +54,8 @@ export default async function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      <SecuritySettings />
 
       <DeleteAccount email={user.email ?? ''} />
     </div>

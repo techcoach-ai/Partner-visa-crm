@@ -74,7 +74,7 @@ npm run dev
 | `app/(app)/documents` | Every uploaded document in one place |
 | `app/(app)/assistant` | Q&A grounded in the user's own checklist |
 | `app/(app)/drafter` | Statement drafter |
-| `app/(app)/settings` | Account details and deletion |
+| `app/(app)/settings` | Account details, document encryption, deletion |
 | `app/api/*` | Server-only routes; the Anthropic key never reaches the browser |
 | `lib/readiness.ts` | The readiness gate |
 | `lib/supabase/*` | Server, browser, middleware and service-role clients |
@@ -112,6 +112,18 @@ Uploaded documents are encrypted in the browser before they leave the device.
 - While locked, the UI shows *"Encrypted document"* — never the UUID. Search
   runs over decrypted names.
 - `size_bytes` is still the plaintext length, so sizes display honestly.
+
+### Where the passphrase is set and unlocked
+
+- **Settings → Security** (`/settings`) is the deliberate entry point. It shows
+  the current state — Not set up / Locked / Unlocked — lets a first-time user
+  create a passphrase, lets a returning user unlock, and has a **Lock now**
+  button that clears the key from memory without closing the tab.
+- The same forms also appear **inline** on `/documents` and on a checklist item
+  (`/checklist/[entryId]`) when they are needed there, so nobody is sent away
+  mid-task to go and find a settings page.
+- The app header carries a persistent indicator. *Set up encryption* and
+  *Documents locked* link to Settings → Security; *Unlocked* is quiet.
 
 **If the passphrase is lost, the uploaded copies cannot be recovered by anyone,
 including us.** That is the point of the design, and the setup screen requires
