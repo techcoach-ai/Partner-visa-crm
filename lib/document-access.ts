@@ -22,6 +22,8 @@ export interface StoredDocument {
   mime_type: string | null;
   encrypted?: boolean | null;
   iv?: string | null;
+  /** Real type, derived in the browser; encrypted rows store octet-stream. */
+  displayMimeType?: string;
 }
 
 /** Signed URL, minted server-side after an ownership check, valid for 60 seconds. */
@@ -79,7 +81,7 @@ export function getSessionKey(): CryptoKey | null {
 export async function openDocument(doc: StoredDocument): Promise<void> {
   const bytes = await fetchPlaintext(doc);
   const blob = new Blob([bytes as BufferSource], {
-    type: doc.mime_type || 'application/octet-stream',
+    type: doc.displayMimeType || doc.mime_type || 'application/octet-stream',
   });
   const url = URL.createObjectURL(blob);
   window.open(url, '_blank', 'noopener,noreferrer');
@@ -87,16 +89,25 @@ export async function openDocument(doc: StoredDocument): Promise<void> {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-/** Saves the decrypted file under its original name. */
-export async function downloadDocument(doc: StoredDocument): Promise<void> {
+/**
+ * Saves the decrypted file.
+ *
+ * saveAs must be supplied for encrypted documents: doc.file_name holds the
+ * random object UUID, so saving under it would produce an extensionless file
+ * the operating system cannot open.
+ */
+export async function downloadDocument(
+  doc: StoredDocument,
+  saveAs?: string,
+): Promise<void> {
   const bytes = await fetchPlaintext(doc);
   const blob = new Blob([bytes as BufferSource], {
-    type: doc.mime_type || 'application/octet-stream',
+    type: doc.displayMimeType || doc.mime_type || 'application/octet-stream',
   });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.download = doc.file_name;
+  anchor.download = saveAs || doc.file_name;
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();

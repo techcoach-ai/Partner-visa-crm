@@ -22,13 +22,17 @@ const {
   PBKDF2_ITERATIONS,
   checkVerifier,
   decryptBytes,
+  decryptText,
   deriveKey,
   encryptBytes,
+  encryptText,
   fromBase64,
   makeVerifier,
   randomSalt,
   toBase64,
 } = require('../lib/crypto') as typeof import('../lib/crypto');
+
+const { mimeFromName } = require('../lib/storage') as typeof import('../lib/storage');
 
 let pass = 0;
 let fail = 0;
@@ -115,6 +119,37 @@ async function main() {
   check('a fresh IV is used per file',
     Buffer.compare(Buffer.from(a.iv), Buffer.from(b.iv)) !== 0 &&
     Buffer.compare(Buffer.from(a.ciphertext), Buffer.from(b.ciphertext)) !== 0);
+
+  // ── filename blinding ──────────────────────────────────────────────────────
+  const realName = 'passport-scan (front & back).pdf';
+  const nameEnv = await encryptText(key, realName);
+  check('filename round-trips exactly', (await decryptText(key, nameEnv)) === realName);
+  check('name ciphertext does not contain the name',
+    !atob(nameEnv.ciphertext).includes('passport'));
+
+  let nameRejected = false;
+  try {
+    await decryptText(wrongKey, nameEnv);
+  } catch {
+    nameRejected = true;
+  }
+  check('wrong key cannot read the filename', nameRejected);
+
+  const nameEnv2 = await encryptText(key, realName);
+  check('same filename encrypts differently each time (fresh IV)',
+    nameEnv.iv !== nameEnv2.iv && nameEnv.ciphertext !== nameEnv2.ciphertext);
+
+  check('unicode filenames survive', await (async () => {
+    const n = '護照掃描-café-🛂.pdf';
+    return (await decryptText(key, await encryptText(key, n))) === n;
+  })());
+
+  // The real MIME type must be recoverable from the decrypted name, because
+  // the server only stores octet-stream for encrypted rows.
+  check('mime recovered from decrypted name', mimeFromName(realName) === 'application/pdf');
+  check('mime recovery is case-insensitive', mimeFromName('SCAN.JPEG') === 'image/jpeg');
+  check('unknown extension yields empty, not a guess', mimeFromName('notes.txt') === '');
+  check('a bare UUID yields empty', mimeFromName('7f3a9c22-1111-4bbb-8ccc-000000000001') === '');
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail === 0 ? 0 : 1);

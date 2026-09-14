@@ -31,7 +31,8 @@ In the Supabase SQL editor, run in order:
    document path trigger, rate limiting, storage RLS.
 4. `migrations/2026-09-14-e2e-encryption.sql` — the `user_crypto` table and the
    document encryption envelope.
-5. If this database was seeded with any earlier version of `seed.sql`, also run
+5. `migrations/2026-09-14-filename-blinding.sql` — `name_cipher` / `name_iv`.
+6. If this database was seeded with any earlier version of `seed.sql`, also run
    `migrations/2026-09-14-offshore-309-100.sql`. `seed.sql` only inserts
    items whose title is absent, so re-running it will not rewrite items that
    changed — it would add the new ones alongside the stale ones. The migration
@@ -100,9 +101,17 @@ Uploaded documents are encrypted in the browser before they leave the device.
 - The passphrase and the key are never sent to the server. The salt is public —
   it stops one precomputed table working against every user and reveals nothing
   on its own.
-- Each file gets a fresh 12-byte IV. Only ciphertext is uploaded; `mime_type`,
-  `file_name` and `size_bytes` describe the plaintext so files can be rendered
-  once decrypted.
+- Each file gets a fresh 12-byte IV. Only ciphertext is uploaded.
+- **Filenames and types are blinded.** For an encrypted document the storage
+  object is named with a random UUID, `file_name` holds that same UUID and
+  `mime_type` holds `application/octet-stream`. The real display name is
+  encrypted under the same key into `name_cipher` / `name_iv`, and the real type
+  is recovered in the browser from the decrypted name. A file called
+  `passport-scan.pdf` would otherwise have announced its own contents to anyone
+  reading a row, a bucket listing or a log line.
+- While locked, the UI shows *"Encrypted document"* — never the UUID. Search
+  runs over decrypted names.
+- `size_bytes` is still the plaintext length, so sizes display honestly.
 
 **If the passphrase is lost, the uploaded copies cannot be recovered by anyone,
 including us.** That is the point of the design, and the setup screen requires

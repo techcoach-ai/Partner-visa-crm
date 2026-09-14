@@ -390,6 +390,13 @@ create policy "own crypto - create" on user_crypto
 alter table documents add column if not exists encrypted boolean not null default false;
 alter table documents add column if not exists iv text;  -- base64, per file
 
+-- Filename blinding. For an encrypted document, file_name holds a random UUID
+-- and mime_type holds 'application/octet-stream', so the server learns nothing
+-- from the row: a file called passport-scan.pdf would otherwise announce its own
+-- contents. The real display name is encrypted under the same session key.
+alter table documents add column if not exists name_cipher text;  -- base64
+alter table documents add column if not exists name_iv text;      -- base64
+
 do $$
 begin
   if not exists (
@@ -398,5 +405,14 @@ begin
     -- An encrypted row without its IV is unrecoverable data. Refuse to store one.
     alter table documents add constraint documents_iv_present
       check (not encrypted or iv is not null);
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint where conname = 'documents_name_cipher_present'
+  ) then
+    -- Same reasoning for the blinded name: an encrypted row whose name cannot be
+    -- decrypted would display as a UUID forever.
+    alter table documents add constraint documents_name_cipher_present
+      check (not encrypted or (name_cipher is not null and name_iv is not null));
   end if;
 end $$;

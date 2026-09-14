@@ -22,6 +22,8 @@ export default async function DocumentsPage() {
         notes: doc.ai_notes,
         encrypted: Boolean(doc.encrypted),
         iv: doc.iv,
+        nameCipher: doc.name_cipher,
+        nameIv: doc.name_iv,
         uploadedAt: doc.uploaded_at,
         entryId: entry.id,
         requirement: entry.checklist_item.title,

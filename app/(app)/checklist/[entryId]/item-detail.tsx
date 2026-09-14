@@ -11,7 +11,7 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react';
-import { encryptBytes, toBase64 } from '@/lib/crypto';
+import { encryptBytes, encryptText, toBase64 } from '@/lib/crypto';
 import { useDocumentCrypto } from '@/components/crypto-provider';
 import {
   downloadDocument,
@@ -25,8 +25,9 @@ import {
   MAX_UPLOAD_BYTES,
   REVIEW_MAX_PLAINTEXT_BYTES,
   isAllowedMimeType,
-  sanitiseFileName,
+  mimeFromName,
 } from '@/lib/storage';
+import { useDocumentNames } from '@/lib/use-document-names';
 import {
   STATUS_LABELS,
   type AiVerdict,
@@ -79,6 +80,7 @@ export function ItemDetail({
 }) {
   const router = useRouter();
   const { key: cryptoKey } = useDocumentCrypto();
+  const { nameOf } = useDocumentNames(documents);
   const [, startTransition] = useTransition();
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -111,14 +113,21 @@ export function ItemDetail({
         continue;
       }
 
-      const path = `${applicationId}/${itemId}/${Date.now()}-${sanitiseFileName(file.name)}`;
+      // The object name is a random UUID, not the filename. A bucket listing,
+      // a log line or a leaked path reveals nothing: "passport-scan.pdf" would
+      // otherwise describe its own contents to anyone who saw the path.
+      const objectName = crypto.randomUUID();
+      const path = `${applicationId}/${itemId}/${objectName}`;
 
-      // Encrypt here, in the browser. Only ciphertext is ever uploaded.
+      // Encrypt here, in the browser. Only ciphertext is ever uploaded, and the
+      // real filename is encrypted separately under the same key.
       let iv: Uint8Array;
       let ciphertext: Uint8Array;
+      let nameEnvelope: { iv: string; ciphertext: string };
       try {
         const plaintext = new Uint8Array(await file.arrayBuffer());
         ({ iv, ciphertext } = await encryptBytes(cryptoKey, plaintext));
+        nameEnvelope = await encryptText(cryptoKey, file.name);
       } catch {
         setError(`Could not encrypt "${file.name}".`);
         continue;
@@ -130,17 +139,20 @@ export function ItemDetail({
         continue;
       }
 
-      // The row is written server-side, where the path is verified against the
-      // folder for this item. mime_type and size describe the PLAINTEXT, so the
-      // file can be rendered correctly once decrypted.
+      // The row is written server-side, where the path is verified and the
+      // blinded values are enforced. The real filename and MIME type are never
+      // sent: the server stores the UUID and octet-stream, and the true name
+      // only as ciphertext it cannot read.
       const result = await recordDocument({
         entryId,
         storagePath: path,
-        fileName: file.name,
-        mimeType: file.type,
+        fileName: objectName,
+        mimeType: '',
         sizeBytes: file.size,
         encrypted: true,
         iv: toBase64(iv),
+        nameCipher: nameEnvelope.ciphertext,
+        nameIv: nameEnvelope.iv,
       });
 
       if (result.error) {
@@ -175,6 +187,16 @@ export function ItemDetail({
         );
       }
 
+      // For an encrypted document the stored mime_type is octet-stream by
+      // design, so the real type has to come from here — it is recoverable
+      // from the decrypted filename, which only this browser can read.
+      const realMime = doc.encrypted ? mimeFromName(nameOf(doc)) : doc.mime_type ?? '';
+      if (doc.encrypted && !realMime) {
+        throw new Error(
+          'Could not determine this file type. Unlock your documents and try again.',
+        );
+      }
+
       // Decrypted here and sent straight to our route, which holds it in memory
       // and saves only the verdict. The server can no longer read it from
       // storage, because storage only ever held ciphertext.
@@ -183,7 +205,7 @@ export function ItemDetail({
       const res = await fetch(`/api/documents/${doc.id}/review`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data, mimeType: doc.mime_type ?? '' }),
+        body: JSON.stringify({ data, mimeType: realMime }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Review failed.');
@@ -198,7 +220,12 @@ export function ItemDetail({
   async function open(doc: DocumentRow) {
     setError(null);
     try {
-      await openDocument(doc);
+      // Encrypted rows store octet-stream, which the browser would download
+      // rather than render. Give it the real type from the decrypted name.
+      await openDocument({
+        ...doc,
+        displayMimeType: doc.encrypted ? mimeFromName(nameOf(doc)) : undefined,
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not open the file.');
     }
@@ -207,7 +234,8 @@ export function ItemDetail({
   async function download(doc: DocumentRow) {
     setError(null);
     try {
-      await downloadDocument(doc);
+      // Save under the real name, not the UUID the server holds.
+      await downloadDocument(doc, nameOf(doc));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not download the file.');
     }
@@ -323,10 +351,11 @@ export function ItemDetail({
                 <li key={doc.id} className="space-y-2 p-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{doc.file_name}</p>
+                      <p className="truncate text-sm font-medium">{nameOf(doc)}</p>
                       <p className="flex items-center gap-1 text-xs text-muted-foreground">
                         {formatBytes(doc.size_bytes)}
-                        {doc.mime_type ? ` · ${doc.mime_type}` : ''}
+                        {/* octet-stream on every encrypted row is noise. */}
+                        {!doc.encrypted && doc.mime_type ? ` · ${doc.mime_type}` : ''}
                         {doc.encrypted && (
                           <>
                             {' · '}
@@ -340,11 +369,11 @@ export function ItemDetail({
                       <VerdictPill verdict={(doc.ai_verdict ?? 'pending') as AiVerdict} />
                       <Button size="sm" variant="ghost" onClick={() => void open(doc)}>
                         <ExternalLink className="h-4 w-4" />
-                        <span className="sr-only">Open {doc.file_name}</span>
+                        <span className="sr-only">Open {nameOf(doc)}</span>
                       </Button>
                       <Button size="sm" variant="ghost" onClick={() => void download(doc)}>
                         <Download className="h-4 w-4" />
-                        <span className="sr-only">Download {doc.file_name}</span>
+                        <span className="sr-only">Download {nameOf(doc)}</span>
                       </Button>
                       <Button
                         size="sm"

@@ -87,7 +87,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     .from('documents')
     .select(
       `
-      id, file_name,
+      id, file_name, encrypted, mime_type,
       application_item:application_items (
         checklist_item:checklist_items ( title, guidance, category:checklist_categories ( pillar ) )
       )
@@ -106,17 +106,30 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   // 2) The plaintext, supplied by the client because only it can decrypt.
   const body = await req.json().catch(() => null);
   const dataBase64 = typeof body?.data === 'string' ? body.data : '';
-  const mime = typeof body?.mimeType === 'string' ? body.mimeType : '';
+  const postedMime = typeof body?.mimeType === 'string' ? body.mimeType : '';
 
   if (!dataBase64) {
     return NextResponse.json({ error: 'No document content was sent.' }, { status: 400 });
   }
+
+  const encrypted = Boolean(doc.encrypted);
+
+  // For an encrypted document the stored mime_type is 'application/octet-stream'
+  // by design — the real type is blinded along with the filename. It can only
+  // come from the client, which decrypted the file to send it. Legacy rows keep
+  // falling back to the stored value.
+  const mime = encrypted ? postedMime : postedMime || (doc.mime_type as string) || '';
+
+  // file_name holds the random object UUID for an encrypted row, so it must not
+  // appear in a message — it would be stored in ai_notes and shown to the user.
+  const describe = encrypted ? 'This document' : `"${doc.file_name}"`;
+
   if (!isAllowedMimeType(mime)) {
     return settle(
       supabase,
       doc.id as string,
       'pending',
-      `Automated review supports PDF, JPEG, PNG, GIF and WebP files. Convert "${doc.file_name}" and re-run.`,
+      `Automated review supports PDF, JPEG, PNG, GIF and WebP files. ${describe} could not be identified — convert it and re-run.`,
     );
   }
 
@@ -135,7 +148,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       supabase,
       doc.id as string,
       'pending',
-      `"${doc.file_name}" is too large to review automatically (limit 3 MB). It is stored safely — only the review is limited.`,
+      `${describe} is too large to review automatically (limit 3 MB). It is stored safely — only the review is limited.`,
     );
   }
 

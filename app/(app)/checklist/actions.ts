@@ -116,14 +116,23 @@ export async function setItemNotes(
 export async function recordDocument(input: {
   entryId: string;
   storagePath: string;
+  /**
+   * For an encrypted upload this is the random UUID used as the object name —
+   * never the user's filename, which is blinded into nameCipher instead.
+   * For a legacy unencrypted upload it is the real filename.
+   */
   fileName: string;
-  /** The ORIGINAL type of the plaintext, not the stored object's octet-stream. */
+  /** Ignored for encrypted uploads, which are always stored as octet-stream. */
   mimeType: string;
   /** Plaintext length, so the UI can show a true size. */
   sizeBytes: number;
   encrypted: boolean;
   /** base64, required when encrypted. */
   iv: string | null;
+  /** base64 ciphertext of the real display name; required when encrypted. */
+  nameCipher?: string | null;
+  /** base64 IV for nameCipher; required when encrypted. */
+  nameIv?: string | null;
 }): Promise<ActionResult & { documentId?: string }> {
   const { supabase, user } = await requireUserClient();
   if (!user) return { error: 'Not signed in.' };
@@ -141,17 +150,38 @@ export async function recordDocument(input: {
   if (input.encrypted && !input.iv) {
     return { error: 'Encrypted uploads must record their IV.' };
   }
+  if (input.encrypted && (!input.nameCipher || !input.nameIv)) {
+    return { error: 'Encrypted uploads must record their blinded filename.' };
+  }
+
+  // Blinding is enforced here rather than trusted from the caller: for an
+  // encrypted upload the stored name must be the opaque object name and the
+  // stored type must be octet-stream, whatever the client sent. A client bug
+  // that passed the real filename through must not be able to persist it.
+  const blindedName = input.encrypted
+    ? input.storagePath.slice(expectedPrefix.length)
+    : input.fileName.slice(0, 255);
+
+  if (input.encrypted && !blindedName) {
+    return { error: 'That file path is not valid for this item.' };
+  }
+
+  const storedMimeType = input.encrypted
+    ? 'application/octet-stream'
+    : input.mimeType || null;
 
   const { data, error } = await supabase
     .from('documents')
     .insert({
       application_item_id: entry.id,
       storage_path: input.storagePath,
-      file_name: input.fileName.slice(0, 255),
-      mime_type: input.mimeType || null,
+      file_name: blindedName,
+      mime_type: storedMimeType,
       size_bytes: input.sizeBytes,
       encrypted: input.encrypted,
       iv: input.iv,
+      name_cipher: input.encrypted ? input.nameCipher : null,
+      name_iv: input.encrypted ? input.nameIv : null,
     })
     .select('id')
     .single();

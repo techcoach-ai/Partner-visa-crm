@@ -4,6 +4,8 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Download, ExternalLink, FileText, Search } from 'lucide-react';
 import { downloadDocument, openDocument } from '@/lib/document-access';
+import { mimeFromName } from '@/lib/storage';
+import { useDocumentNames } from '@/lib/use-document-names';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -21,6 +23,8 @@ export interface LibraryRow {
   notes: string | null;
   encrypted: boolean;
   iv: string | null;
+  nameCipher: string | null;
+  nameIv: string | null;
   uploadedAt: string;
   entryId: string;
   requirement: string;
@@ -39,30 +43,61 @@ export function DocumentLibrary({ rows }: { rows: LibraryRow[] }) {
   const [query, setQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
 
+  // Encrypted rows carry a UUID in fileName, so names are resolved here before
+  // anything is displayed or searched.
+  const nameable = useMemo(
+    () =>
+      rows.map((r) => ({
+        id: r.id,
+        file_name: r.fileName,
+        encrypted: r.encrypted,
+        name_cipher: r.nameCipher,
+        name_iv: r.nameIv,
+      })),
+    [rows],
+  );
+  const { nameOf } = useDocumentNames(nameable);
+
+  function displayName(row: LibraryRow) {
+    return nameOf({
+      id: row.id,
+      file_name: row.fileName,
+      encrypted: row.encrypted,
+      name_cipher: row.nameCipher,
+      name_iv: row.nameIv,
+    });
+  }
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return rows;
+    // Search the decrypted names: matching UUIDs would be useless.
     return rows.filter(
       (r) =>
-        r.fileName.toLowerCase().includes(q) ||
+        displayName(r).toLowerCase().includes(q) ||
         r.requirement.toLowerCase().includes(q) ||
         r.categoryName.toLowerCase().includes(q),
     );
-  }, [rows, query]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, query, nameOf]);
 
   /** Decrypted in the browser; the server only ever held ciphertext. */
   async function act(row: LibraryRow, how: 'open' | 'download') {
     setError(null);
+    const realName = displayName(row);
     const doc = {
       id: row.id,
       file_name: row.fileName,
       mime_type: row.mimeType,
       encrypted: row.encrypted,
       iv: row.iv,
+      // Encrypted rows store octet-stream; recover the real type so the
+      // browser renders rather than downloads, and saves under the real name.
+      displayMimeType: row.encrypted ? mimeFromName(realName) : undefined,
     };
     try {
       if (how === 'open') await openDocument(doc);
-      else await downloadDocument(doc);
+      else await downloadDocument(doc, realName);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not open the file.');
     }
@@ -114,10 +149,10 @@ export function DocumentLibrary({ rows }: { rows: LibraryRow[] }) {
               <li key={row.id} className="space-y-2 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{row.fileName}</p>
+                    <p className="truncate text-sm font-medium">{displayName(row)}</p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       {formatBytes(row.sizeBytes)}
-                      {row.mimeType ? ` · ${row.mimeType}` : ''}
+                      {!row.encrypted && row.mimeType ? ` · ${row.mimeType}` : ''}
                       {row.encrypted ? ' · encrypted' : ''} ·{' '}
                       {new Date(row.uploadedAt).toLocaleDateString('en-AU', {
                         day: 'numeric',
@@ -143,11 +178,11 @@ export function DocumentLibrary({ rows }: { rows: LibraryRow[] }) {
                     <VerdictPill verdict={row.verdict} />
                     <Button size="sm" variant="ghost" onClick={() => void act(row, 'open')}>
                       <ExternalLink className="h-4 w-4" />
-                      <span className="sr-only">Open {row.fileName}</span>
+                      <span className="sr-only">Open {displayName(row)}</span>
                     </Button>
                     <Button size="sm" variant="ghost" onClick={() => void act(row, 'download')}>
                       <Download className="h-4 w-4" />
-                      <span className="sr-only">Download {row.fileName}</span>
+                      <span className="sr-only">Download {displayName(row)}</span>
                     </Button>
                   </div>
                 </div>

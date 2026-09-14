@@ -131,6 +131,30 @@ export async function decryptBytes(
   return new Uint8Array(plaintext);
 }
 
+// ── short strings (filenames) ─────────────────────────────────────────────────
+
+/** Encrypts a string to a base64 envelope. Used to blind display filenames. */
+export async function encryptText(
+  key: CryptoKey,
+  text: string,
+): Promise<CryptoEnvelope> {
+  const { iv, ciphertext } = await encryptBytes(key, new TextEncoder().encode(text));
+  return { iv: toBase64(iv), ciphertext: toBase64(ciphertext) };
+}
+
+/** Throws on the wrong key or altered data, exactly as decryptBytes does. */
+export async function decryptText(
+  key: CryptoKey,
+  envelope: CryptoEnvelope,
+): Promise<string> {
+  const bytes = await decryptBytes(
+    key,
+    fromBase64(envelope.iv),
+    fromBase64(envelope.ciphertext),
+  );
+  return new TextDecoder().decode(bytes);
+}
+
 // ── verifier ──────────────────────────────────────────────────────────────────
 
 export async function makeVerifier(key: CryptoKey): Promise<CryptoEnvelope> {

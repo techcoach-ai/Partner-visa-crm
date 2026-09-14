@@ -97,6 +97,15 @@ export interface DocumentRow {
   encrypted: boolean;
   /** base64 IV for that ciphertext; null only on pre-encryption rows. */
   iv: string | null;
+  /**
+   * base64 ciphertext of the real display filename. For encrypted rows,
+   * file_name holds a random UUID and mime_type holds octet-stream, so this is
+   * the only place the real name exists — and only the passphrase holder can
+   * read it.
+   */
+  name_cipher: string | null;
+  /** base64 IV for name_cipher. */
+  name_iv: string | null;
 }
 
 export interface ApplicationItem {

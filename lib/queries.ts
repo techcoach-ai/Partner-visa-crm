@@ -54,7 +54,8 @@ export async function getChecklistEntries(applicationId: string): Promise<Checkl
         category:checklist_categories ( id, key, name, pillar, description, sort_order )
       ),
       documents ( id, application_item_id, storage_path, file_name, mime_type,
-                  size_bytes, ai_verdict, ai_notes, uploaded_at, encrypted, iv )
+                  size_bytes, ai_verdict, ai_notes, uploaded_at, encrypted, iv,
+                  name_cipher, name_iv )
     `,
     )
     .eq('application_id', applicationId);

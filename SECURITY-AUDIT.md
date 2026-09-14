@@ -294,8 +294,12 @@ exactly-20 MB file would have been rejected.
   attacker nothing but a review of their own file. Inherent to E2E, not a defect.
 - **AI review is capped at 3 MB of plaintext**, because the browser must now post
   the file and serverless bodies are limited. Uploads remain 20 MB.
-- **Metadata is not encrypted.** Filenames, MIME types and sizes are readable
-  server-side. A filename like `passport-scan.pdf` still leaks its subject.
+- **Filenames and MIME types are now blinded** (2026-09-14, second change).
+  Encrypted rows store a random UUID as both the object name and `file_name`,
+  and `application/octet-stream` as `mime_type`; the real name is encrypted into
+  `name_cipher` / `name_iv`. `size_bytes`, upload time and the checklist item a
+  document is filed against remain visible server-side — a 2 MB PDF on the
+  *Applicant passport* item is still suggestive even when nothing is named.
 - **This does not defend against a compromised client.** Code served by the app
   could capture the passphrase. E2E encryption protects data at rest on the
   server; it does not protect against the server serving hostile JavaScript.
@@ -313,3 +317,50 @@ rejects the wrong one, and a fresh IV is used per file.
 Database behaviour verified on PostgreSQL 16: an encrypted row without its IV is
 rejected by `documents_iv_present`, legacy plaintext rows still insert, and the
 migration applies cleanly over the previous schema.
+
+
+## Addendum — filename blinding (2026-09-14)
+
+Closes the metadata leak noted above. For `encrypted = true` rows only:
+
+| Column | Before | After |
+|---|---|---|
+| storage object name | `1726…-passport-scan.pdf` | random UUID |
+| `file_name` | `passport-scan.pdf` | the same UUID |
+| `mime_type` | `application/pdf` | `application/octet-stream` |
+| `name_cipher` / `name_iv` | — | the real name, AES-GCM under the session key |
+
+Blinding is enforced **in the server action**, not merely by the client: the
+stored name is derived from the verified storage path and the type is hardcoded,
+so a client bug that passed the real filename through cannot persist it.
+`documents_name_cipher_present` refuses an encrypted row without both name
+columns, matching the existing rule for the file IV.
+
+Consequences handled rather than left to surface later:
+
+- **Download** now saves under the decrypted name. Left alone it would have
+  written an extensionless UUID the operating system cannot open.
+- **Review messages** no longer interpolate `file_name`; an encrypted document
+  is described neutrally, because that string is stored in `ai_notes` and shown
+  back to the user.
+- **Library search** runs over decrypted names, not UUIDs.
+- **Opening** a file passes the type recovered from the decrypted name, so the
+  browser renders a PDF instead of downloading an octet-stream blob.
+- The review route takes the MIME from the POST body for encrypted rows, since
+  the stored value is deliberately meaningless. Legacy rows still fall back to
+  the database value.
+
+Legacy `encrypted = false` rows are untouched and render from `file_name` as
+before — verified in the same database test.
+
+`npm run verify:crypto` now runs 23 assertions, adding: filename round-trips
+exactly, the ciphertext does not contain the name, a wrong key cannot read it, a
+fresh IV is used per name, unicode filenames survive, and MIME recovery from a
+decrypted name is correct, case-insensitive, and returns empty rather than
+guessing for an unknown extension or a bare UUID.
+
+### Not fixed by this
+
+Existing encrypted documents uploaded before this change still carry their real
+filename in the database. Blinding cannot retroactively un-know them — the
+migration's third query lists any such rows so they can be re-uploaded.

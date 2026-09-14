@@ -42,6 +42,28 @@ export const ALLOWED_TYPES_LABEL = 'PDF, JPEG, PNG, GIF or WebP';
  */
 export const REVIEW_MAX_PLAINTEXT_BYTES = 3 * 1024 * 1024;
 
+const EXTENSION_MIME: Record<string, AllowedMimeType> = {
+  pdf: 'application/pdf',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  gif: 'image/gif',
+  webp: 'image/webp',
+};
+
+/**
+ * Recovers the MIME type from a filename's extension.
+ *
+ * Encrypted documents store 'application/octet-stream' server-side by design,
+ * so the real type has to be derived in the browser from the decrypted name.
+ * Returns '' when the extension is unknown, so callers can fail loudly rather
+ * than guessing a type the API would reject.
+ */
+export function mimeFromName(name: string): AllowedMimeType | '' {
+  const ext = name.split('.').pop()?.toLowerCase() ?? '';
+  return EXTENSION_MIME[ext] ?? '';
+}
+
 /**
  * Strips anything that could be meaningful to a path or a shell, so an upload
  * cannot escape its folder or smuggle separators into the object key.
