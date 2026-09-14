@@ -29,8 +29,8 @@ export const PILLAR_LABELS: Record<Pillar, string> = {
 
 /**
  * Statuses that count as "done" for the readiness gate.
- * not_applicable counts as done by design — e.g. no children, or offshore
- * police checks that were never needed.
+ * not_applicable counts as done by design — e.g. no children, or a police
+ * check for a country the applicant never lived in long enough to need one.
  */
 export const DONE_STATUSES: ItemStatus[] = ['uploaded', 'verified', 'not_applicable'];
 

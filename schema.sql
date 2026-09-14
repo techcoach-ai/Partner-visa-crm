@@ -11,7 +11,7 @@ create type ai_verdict  as enum ('pending','satisfies','partial','insufficient',
 create table applications (
   id                uuid primary key default gen_random_uuid(),
   owner_id          uuid not null references auth.users(id) on delete cascade,
-  subclass          text not null default '820/801',
+  subclass          text not null default '309/100',
   relationship_basis text not null default 'de_facto',
   applicant_name    text,
   sponsor_name      text,

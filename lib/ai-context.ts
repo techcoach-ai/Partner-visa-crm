@@ -45,7 +45,7 @@ export function buildGroundingContext(entries: ChecklistEntry[]): string {
 ${VISA.name} (subclass ${VISA.subclass}), basis: ${VISA.relationship_basis}.
 Lodgement: ${VISA.lodgement}
 Application charge: AUD ${VISA.application_fee_aud}. ${VISA.fee_note}
-If the applicant is outside Australia, the relevant visa is instead ${VISA.offshore_alternative}.
+If the applicant is inside Australia at lodgement, the relevant visa is instead ${VISA.onshore_alternative}.
 
 ## Key rules
 ${rules}

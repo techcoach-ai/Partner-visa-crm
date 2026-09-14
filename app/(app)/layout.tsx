@@ -1,48 +1,34 @@
-import Link from 'next/link';
-import { requireUser } from '@/lib/queries';
+import { cookies } from 'next/headers';
+import { requireUser, getApplication } from '@/lib/queries';
 import { DisclaimerFooter } from '@/components/disclaimer';
-import { Button } from '@/components/ui/button';
-
-const NAV = [
-  { href: '/dashboard', label: 'Dashboard' },
-  { href: '/checklist', label: 'Checklist' },
-  { href: '/assistant', label: 'Assistant' },
-  { href: '/drafter', label: 'Statements' },
-  { href: '/settings', label: 'Settings' },
-];
+import { AppSidebar } from '@/components/app-sidebar';
+import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
+import { VISA } from '@/lib/visa-data';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   await requireUser();
+  const application = await getApplication();
+
+  // Read the persisted rail state on the server so the sidebar renders at the
+  // right width on first paint instead of snapping after hydration.
+  const defaultOpen = cookies().get('sidebar_state')?.value !== 'false';
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="border-b">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
-          <Link href="/dashboard" className="font-semibold">
-            Partner Visa CRM
-          </Link>
-          <nav className="flex flex-1 flex-wrap gap-x-4 gap-y-1 text-sm">
-            {NAV.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="text-muted-foreground transition-colors hover:text-foreground"
-              >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
-          <form action="/auth/signout" method="post">
-            <Button type="submit" variant="ghost" size="sm">
-              Sign out
-            </Button>
-          </form>
-        </div>
-      </header>
+    <SidebarProvider defaultOpen={defaultOpen}>
+      <AppSidebar subclass={application?.subclass ?? VISA.subclass} />
 
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">{children}</main>
+      <SidebarInset>
+        <header className="sticky top-0 z-10 flex h-14 items-center gap-2 border-b bg-background/95 px-4 backdrop-blur">
+          <SidebarTrigger />
+          <span className="text-sm text-muted-foreground">
+            Subclass {application?.subclass ?? VISA.subclass} — offshore, de facto
+          </span>
+        </header>
 
-      <DisclaimerFooter />
-    </div>
+        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">{children}</main>
+
+        <DisclaimerFooter />
+      </SidebarInset>
+    </SidebarProvider>
   );
 }

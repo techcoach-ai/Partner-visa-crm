@@ -1,5 +1,9 @@
 -- Partner Visa CRM — seed data (paste into Supabase SQL editor AFTER schema.sql)
 -- Idempotent: safe to re-run. Categories upsert by key; items insert only if absent.
+--
+-- NOTE: items insert only when the title is absent. If this database was seeded
+-- with an earlier version of this file, re-running it will NOT rewrite changed
+-- items — run the migration in migrations/ instead.
 
 -- ── Categories ─────────────────────────────────────────────────────────
 insert into checklist_categories (key, name, pillar, description, sort_order) values ('eligibility', 'Eligibility & relationship basis', NULL, 'Threshold checks that must pass before lodging.', 1)
@@ -29,21 +33,21 @@ insert into checklist_categories (key, name, pillar, description, sort_order) va
 
 -- ── Items (insert only if not already present for that category) ────────
 insert into checklist_items (category_id, title, description, applies_to, required, form_reference, guidance, sort_order)
-  select c.id, 'Confirm de facto basis met', NULL, 'couple', true, NULL, '12 months cohabitation immediately before applying, OR registered relationship, OR child of the relationship. Record which one you rely on.', 0
+  select c.id, 'Confirm de facto basis met', NULL, 'couple', true, NULL, '12 months living together immediately before applying, OR compelling and compassionate circumstances. Record which one you rely on. Note that an Australian state or territory relationship registration generally does not waive the 12 months for an offshore application.', 0
   from checklist_categories c where c.key = 'eligibility'
   and not exists (select 1 from checklist_items i where i.category_id = c.id and i.title = 'Confirm de facto basis met');
 insert into checklist_items (category_id, title, description, applies_to, required, form_reference, guidance, sort_order)
-  select c.id, 'Relationship registration certificate (if used to waive 12 months)', NULL, 'couple', false, NULL, 'Certificate from a state/territory relationships register (NSW, VIC, QLD, ACT, TAS, SA). Not available in WA or NT.', 1
+  select c.id, 'Compelling and compassionate circumstances (if relied on)', NULL, 'couple', false, NULL, 'Only if you cannot show 12 months of living together immediately before applying. Registration under an Australian state or territory law generally does not waive the 12 months for an offshore application.', 1
   from checklist_categories c where c.key = 'eligibility'
-  and not exists (select 1 from checklist_items i where i.category_id = c.id and i.title = 'Relationship registration certificate (if used to waive 12 months)');
+  and not exists (select 1 from checklist_items i where i.category_id = c.id and i.title = 'Compelling and compassionate circumstances (if relied on)');
 insert into checklist_items (category_id, title, description, applies_to, required, form_reference, guidance, sort_order)
-  select c.id, 'Applicant is onshore & holds a valid substantive visa', NULL, 'applicant', true, NULL, 'Must be in Australia to lodge the 820. Note current visa and expiry.', 2
+  select c.id, 'Applicant is outside Australia at lodgement and at grant', NULL, 'applicant', true, NULL, 'The 309 is an offshore visa: the applicant must be outside Australia when the application is lodged AND when it is granted. Record where the applicant is living and their status there.', 2
   from checklist_categories c where c.key = 'eligibility'
-  and not exists (select 1 from checklist_items i where i.category_id = c.id and i.title = 'Applicant is onshore & holds a valid substantive visa');
+  and not exists (select 1 from checklist_items i where i.category_id = c.id and i.title = 'Applicant is outside Australia at lodgement and at grant');
 insert into checklist_items (category_id, title, description, applies_to, required, form_reference, guidance, sort_order)
-  select c.id, 'Check current visa for ''No Further Stay'' condition', NULL, 'applicant', true, NULL, 'Conditions 8503/8534/8535 can block an onshore lodgement unless waived. Verify in VEVO.', 3
+  select c.id, 'No bridging visa — plan the time outside Australia', NULL, 'applicant', true, NULL, 'A 309 application does not grant any right to be in Australia while it is processed, and no bridging visa is issued. The applicant may visit on a separate visitor visa, but must be outside Australia when the visa is granted. Plan travel, work and housing around this.', 3
   from checklist_categories c where c.key = 'eligibility'
-  and not exists (select 1 from checklist_items i where i.category_id = c.id and i.title = 'Check current visa for ''No Further Stay'' condition');
+  and not exists (select 1 from checklist_items i where i.category_id = c.id and i.title = 'No bridging visa — plan the time outside Australia');
 insert into checklist_items (category_id, title, description, applies_to, required, form_reference, guidance, sort_order)
   select c.id, 'Sponsor eligibility & sponsorship limits', NULL, 'sponsor', true, NULL, 'Sponsor must be an Australian citizen, PR, or eligible NZ citizen; must not have sponsored 2+ partners previously; and must not have been sponsored as a partner within the last 5 years.', 4
   from checklist_categories c where c.key = 'eligibility'
@@ -165,7 +169,7 @@ insert into checklist_items (category_id, title, description, applies_to, requir
   from checklist_categories c where c.key = 'sponsorship'
   and not exists (select 1 from checklist_items i where i.category_id = c.id and i.title = 'Sponsor AFP National Police Check (Code 33)');
 insert into checklist_items (category_id, title, description, applies_to, required, form_reference, guidance, sort_order)
-  select c.id, 'Health examination (after lodgement)', NULL, 'applicant', true, NULL, 'Do NOT book before lodging. Complete via a DHA-approved panel physician (Bupa Medical Visa Services in Australia) once instructed through ImmiAccount.', 34
+  select c.id, 'Health examination (after lodgement)', NULL, 'applicant', true, NULL, 'Do NOT book before lodging. Complete with a DHA-approved panel physician in the country where the applicant is living, once instructed through ImmiAccount.', 34
   from checklist_categories c where c.key = 'health'
   and not exists (select 1 from checklist_items i where i.category_id = c.id and i.title = 'Health examination (after lodgement)');
 insert into checklist_items (category_id, title, description, applies_to, required, form_reference, guidance, sort_order)

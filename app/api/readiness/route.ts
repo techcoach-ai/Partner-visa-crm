@@ -41,7 +41,7 @@ export async function POST() {
       output_config: { effort: 'low' },
       system:
         'You assess how well a set of evidence supports an Australian partner visa ' +
-        'application (subclass 820/801, de facto) across the four evidence pillars: ' +
+        'application (subclass 309/100, offshore, de facto) across the four evidence pillars: ' +
         'financial, household, social, commitment. Thin evidence in any single pillar ' +
         'weakens the whole application, so say plainly which pillar is weakest and what ' +
         'would strengthen it. Judge only the evidence listed — never invent documents. ' +

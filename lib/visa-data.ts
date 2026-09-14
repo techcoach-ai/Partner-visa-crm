@@ -9,7 +9,7 @@ import seed from '@/partner-visa-checklist-seed.json';
 export interface VisaMeta {
   subclass: string;
   name: string;
-  offshore_alternative: string;
+  onshore_alternative: string;
   relationship_basis: string;
   application_fee_aud: number;
   fee_note: string;

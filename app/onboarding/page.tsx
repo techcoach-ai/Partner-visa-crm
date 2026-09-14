@@ -16,7 +16,7 @@ export default async function OnboardingPage() {
     <div className="flex min-h-screen flex-col">
       <main className="mx-auto flex w-full max-w-lg flex-1 flex-col justify-center px-4 py-12">
         <p className="text-sm font-medium text-muted-foreground">
-          Subclass {VISA.subclass} — onshore, de facto
+          Subclass {VISA.subclass} — offshore, de facto
         </p>
         <h1 className="mt-2 text-2xl font-bold tracking-tight">Set up your application</h1>
         <p className="mt-2 text-sm text-muted-foreground">

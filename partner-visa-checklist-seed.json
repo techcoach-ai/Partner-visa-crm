@@ -1,16 +1,16 @@
 {
   "visa": {
-    "subclass": "820/801",
-    "name": "Partner visa (onshore, de facto) — temporary 820 then permanent 801",
-    "offshore_alternative": "309/100 (use if the applicant is outside Australia at lodgement)",
+    "subclass": "309/100",
+    "name": "Partner visa (offshore, de facto) — temporary 309 then permanent 100",
+    "onshore_alternative": "820/801 (use if the applicant is in Australia at lodgement)",
     "relationship_basis": "de_facto",
     "application_fee_aud": 11710,
     "fee_note": "As of July 2026. Non-refundable even if refused or withdrawn. Verify current fee at immi.homeaffairs.gov.au before lodging.",
-    "lodgement": "Online only via ImmiAccount. One combined application covers both 820 and 801.",
+    "lodgement": "Online only via ImmiAccount. One combined application covers both 309 and 100.",
     "key_rules": [
-      "Applicant must be in Australia when the 820 is lodged and when it is decided.",
-      "De facto: 12 months living together immediately before applying, OR relationship registered under an Australian state/territory law (waives the 12 months), OR a child of the relationship.",
-      "Check the applicant's current visa for a 'No Further Stay' condition (8503/8534/8535) — it can block an onshore application unless waived.",
+      "Applicant must be OUTSIDE Australia when the 309 is lodged and when it is granted.",
+      "There is no bridging visa. A 309 application gives no right to be in Australia while it is processed — the applicant may visit on a separate visitor visa, but must be outside Australia when the visa is granted.",
+      "De facto: 12 months living together immediately before applying, OR compelling and compassionate circumstances. Registering the relationship under an Australian state or territory law generally does NOT waive the 12 months for an offshore application.",
       "April 2026 change: lodge 'decision-ready'. Include all documents up front; expect limited/no follow-up requests; incomplete applications risk faster refusal.",
       "Both applicant and sponsor must provide police clearances for every country lived in 12+ months since age 16.",
       "Do NOT book the health examination until instructed via ImmiAccount after lodgement."
@@ -18,72 +18,427 @@
     "disclaimer": "This tool organises documents and reproduces publicly available guidance. It is not migration advice. Confirm everything against immi.homeaffairs.gov.au and consider a MARA-registered migration agent for anything non-standard."
   },
   "categories": [
-    { "key": "eligibility",   "name": "Eligibility & relationship basis", "pillar": null,        "sort_order": 1, "description": "Threshold checks that must pass before lodging." },
-    { "key": "identity_app",  "name": "Applicant identity",               "pillar": null,        "sort_order": 2, "description": "Who the applicant is." },
-    { "key": "identity_spon", "name": "Sponsor identity & status",        "pillar": null,        "sort_order": 3, "description": "Who the sponsor is and proof they can sponsor." },
-    { "key": "financial",     "name": "Pillar 1 — Financial",             "pillar": "financial", "sort_order": 4, "description": "That you share finances and financial commitments." },
-    { "key": "household",     "name": "Pillar 2 — Household",             "pillar": "household", "sort_order": 5, "description": "That you share a home and domestic life." },
-    { "key": "social",        "name": "Pillar 3 — Social",                "pillar": "social",    "sort_order": 6, "description": "That others recognise you as a couple." },
-    { "key": "commitment",    "name": "Pillar 4 — Commitment",            "pillar": "commitment","sort_order": 7, "description": "That the relationship is genuine, continuing and long-term." },
-    { "key": "statements",    "name": "Statements & statutory declarations","pillar": null,      "sort_order": 8, "description": "Your own statements plus Form 888 witnesses." },
-    { "key": "sponsorship",   "name": "Sponsorship",                      "pillar": null,        "sort_order": 9, "description": "The sponsor's own application (Form 40SP)." },
-    { "key": "health",        "name": "Health",                           "pillar": null,        "sort_order": 10,"description": "Medical examination after lodgement." },
-    { "key": "character",     "name": "Character",                        "pillar": null,        "sort_order": 11,"description": "Police clearances for applicant and sponsor." },
-    { "key": "lodgement",     "name": "Lodgement & admin",                "pillar": null,        "sort_order": 12,"description": "Final steps to lodge decision-ready." }
+    {
+      "key": "eligibility",
+      "name": "Eligibility & relationship basis",
+      "pillar": null,
+      "sort_order": 1,
+      "description": "Threshold checks that must pass before lodging."
+    },
+    {
+      "key": "identity_app",
+      "name": "Applicant identity",
+      "pillar": null,
+      "sort_order": 2,
+      "description": "Who the applicant is."
+    },
+    {
+      "key": "identity_spon",
+      "name": "Sponsor identity & status",
+      "pillar": null,
+      "sort_order": 3,
+      "description": "Who the sponsor is and proof they can sponsor."
+    },
+    {
+      "key": "financial",
+      "name": "Pillar 1 — Financial",
+      "pillar": "financial",
+      "sort_order": 4,
+      "description": "That you share finances and financial commitments."
+    },
+    {
+      "key": "household",
+      "name": "Pillar 2 — Household",
+      "pillar": "household",
+      "sort_order": 5,
+      "description": "That you share a home and domestic life."
+    },
+    {
+      "key": "social",
+      "name": "Pillar 3 — Social",
+      "pillar": "social",
+      "sort_order": 6,
+      "description": "That others recognise you as a couple."
+    },
+    {
+      "key": "commitment",
+      "name": "Pillar 4 — Commitment",
+      "pillar": "commitment",
+      "sort_order": 7,
+      "description": "That the relationship is genuine, continuing and long-term."
+    },
+    {
+      "key": "statements",
+      "name": "Statements & statutory declarations",
+      "pillar": null,
+      "sort_order": 8,
+      "description": "Your own statements plus Form 888 witnesses."
+    },
+    {
+      "key": "sponsorship",
+      "name": "Sponsorship",
+      "pillar": null,
+      "sort_order": 9,
+      "description": "The sponsor's own application (Form 40SP)."
+    },
+    {
+      "key": "health",
+      "name": "Health",
+      "pillar": null,
+      "sort_order": 10,
+      "description": "Medical examination after lodgement."
+    },
+    {
+      "key": "character",
+      "name": "Character",
+      "pillar": null,
+      "sort_order": 11,
+      "description": "Police clearances for applicant and sponsor."
+    },
+    {
+      "key": "lodgement",
+      "name": "Lodgement & admin",
+      "pillar": null,
+      "sort_order": 12,
+      "description": "Final steps to lodge decision-ready."
+    }
   ],
   "items": [
-    { "category_key": "eligibility", "title": "Confirm de facto basis met", "applies_to": "couple", "required": true, "form_reference": null, "guidance": "12 months cohabitation immediately before applying, OR registered relationship, OR child of the relationship. Record which one you rely on." },
-    { "category_key": "eligibility", "title": "Relationship registration certificate (if used to waive 12 months)", "applies_to": "couple", "required": false, "form_reference": null, "guidance": "Certificate from a state/territory relationships register (NSW, VIC, QLD, ACT, TAS, SA). Not available in WA or NT." },
-    { "category_key": "eligibility", "title": "Applicant is onshore & holds a valid substantive visa", "applies_to": "applicant", "required": true, "form_reference": null, "guidance": "Must be in Australia to lodge the 820. Note current visa and expiry." },
-    { "category_key": "eligibility", "title": "Check current visa for 'No Further Stay' condition", "applies_to": "applicant", "required": true, "form_reference": null, "guidance": "Conditions 8503/8534/8535 can block an onshore lodgement unless waived. Verify in VEVO." },
-    { "category_key": "eligibility", "title": "Sponsor eligibility & sponsorship limits", "applies_to": "sponsor", "required": true, "form_reference": null, "guidance": "Sponsor must be an Australian citizen, PR, or eligible NZ citizen; must not have sponsored 2+ partners previously; and must not have been sponsored as a partner within the last 5 years." },
-
-    { "category_key": "identity_app", "title": "Applicant passport (photo/bio page)", "applies_to": "applicant", "required": true, "form_reference": null, "guidance": "Valid passport. Include all pages showing identity and any name changes." },
-    { "category_key": "identity_app", "title": "Applicant birth certificate", "applies_to": "applicant", "required": true, "form_reference": null, "guidance": "Certified translation if not in English." },
-    { "category_key": "identity_app", "title": "Applicant passport-style photo", "applies_to": "applicant", "required": true, "form_reference": null, "guidance": "Recent, meets DHA photo specs." },
-    { "category_key": "identity_app", "title": "Change-of-name / prior identity documents", "applies_to": "applicant", "required": false, "form_reference": null, "guidance": "Only if the applicant has changed name or held other identity documents." },
-
-    { "category_key": "identity_spon", "title": "Proof sponsor is Australian citizen / PR / eligible NZ citizen", "applies_to": "sponsor", "required": true, "form_reference": null, "guidance": "Australian passport, citizenship certificate, or visa grant showing PR/eligible NZ status." },
-    { "category_key": "identity_spon", "title": "Sponsor birth certificate / photo ID", "applies_to": "sponsor", "required": true, "form_reference": null, "guidance": "Supports identity on Form 40SP." },
-
-    { "category_key": "financial", "title": "Joint bank account statements", "applies_to": "couple", "required": true, "form_reference": null, "guidance": "Statements over time carry the most weight. Show ongoing joint use, not a token account." },
-    { "category_key": "financial", "title": "Joint liabilities (loans, credit, insurance)", "applies_to": "couple", "required": false, "form_reference": null, "guidance": "Joint loans, shared insurance policies, one partner named on the other's policy." },
-    { "category_key": "financial", "title": "Shared household bills / utilities in both names", "applies_to": "couple", "required": true, "form_reference": null, "guidance": "Electricity, gas, water, internet, phone showing both names or the same address." },
-    { "category_key": "financial", "title": "Joint ownership of major assets", "applies_to": "couple", "required": false, "form_reference": null, "guidance": "Property, vehicle, or other significant shared assets." },
-    { "category_key": "financial", "title": "Evidence of how you share finances / support each other", "applies_to": "couple", "required": false, "form_reference": null, "guidance": "Transfers between accounts, one supporting the other, shared budgeting." },
-
-    { "category_key": "household", "title": "Joint lease or mortgage / property documents", "applies_to": "couple", "required": true, "form_reference": null, "guidance": "Both names on the tenancy or title. If only one name, explain in statements and support with other household evidence." },
-    { "category_key": "household", "title": "Mail addressed to both at the same address", "applies_to": "couple", "required": true, "form_reference": null, "guidance": "A spread of correspondence over time to the shared address." },
-    { "category_key": "household", "title": "Utility / service accounts at shared address", "applies_to": "couple", "required": false, "form_reference": null, "guidance": "Accounts, connection notices, or council correspondence tied to the home." },
-    { "category_key": "household", "title": "Statement on division of household responsibilities", "applies_to": "couple", "required": false, "form_reference": null, "guidance": "Who does what — chores, finances, care duties. Usually covered in personal statements." },
-    { "category_key": "household", "title": "Shared responsibility for children / dependants (if any)", "applies_to": "couple", "required": false, "form_reference": null, "guidance": "Only if applicable." },
-
-    { "category_key": "social", "title": "Photos together across the relationship timeline", "applies_to": "couple", "required": true, "form_reference": null, "guidance": "Dated where possible: with family/friends, events, travel, over time — not just one occasion." },
-    { "category_key": "social", "title": "Joint travel evidence", "applies_to": "couple", "required": false, "form_reference": null, "guidance": "Bookings, itineraries, boarding passes showing travel as a couple." },
-    { "category_key": "social", "title": "Joint invitations / events / memberships", "applies_to": "couple", "required": false, "form_reference": null, "guidance": "Invitations addressed to both, shared club/gym memberships, joint bookings." },
-    { "category_key": "social", "title": "Evidence you present publicly as a couple", "applies_to": "couple", "required": false, "form_reference": null, "guidance": "Social media, messages to/from friends and family acknowledging the relationship." },
-
-    { "category_key": "commitment", "title": "Communication history during any separations", "applies_to": "couple", "required": false, "form_reference": null, "guidance": "Messages/calls when apart, showing a continuing relationship." },
-    { "category_key": "commitment", "title": "Evidence of future plans together", "applies_to": "couple", "required": false, "form_reference": null, "guidance": "Wills naming each other, superannuation/insurance beneficiaries, joint long-term commitments." },
-    { "category_key": "commitment", "title": "Relationship history timeline", "applies_to": "couple", "required": true, "form_reference": null, "guidance": "How and when you met, key milestones, when cohabitation began, decision to commit. Feeds both personal statements." },
-
-    { "category_key": "statements", "title": "Applicant's personal statement", "applies_to": "applicant", "required": true, "form_reference": null, "guidance": "First-person account of the relationship across all four pillars. The AI drafter can build a first pass from your timeline." },
-    { "category_key": "statements", "title": "Sponsor's personal statement", "applies_to": "sponsor", "required": true, "form_reference": null, "guidance": "The sponsor's own first-person account — should corroborate, not copy, the applicant's." },
-    { "category_key": "statements", "title": "Form 888 statutory declaration #1", "applies_to": "couple", "required": true, "form_reference": "Form 888", "guidance": "From an Australian citizen or PR (16+) who knows you as a couple. Witnessed correctly." },
-    { "category_key": "statements", "title": "Form 888 statutory declaration #2", "applies_to": "couple", "required": true, "form_reference": "Form 888", "guidance": "A second independent witness. More strong 888s = stronger social/commitment evidence." },
-
-    { "category_key": "sponsorship", "title": "Sponsor application (Form 40SP)", "applies_to": "sponsor", "required": true, "form_reference": "Form 40SP", "guidance": "Lodged by the sponsor through their own ImmiAccount at the same time as the main application." },
-    { "category_key": "sponsorship", "title": "Sponsor AFP National Police Check (Code 33)", "applies_to": "sponsor", "required": true, "form_reference": null, "guidance": "Australian Federal Police check submitted as part of Form 40SP." },
-
-    { "category_key": "health", "title": "Health examination (after lodgement)", "applies_to": "applicant", "required": true, "form_reference": null, "guidance": "Do NOT book before lodging. Complete via a DHA-approved panel physician (Bupa Medical Visa Services in Australia) once instructed through ImmiAccount." },
-
-    { "category_key": "character", "title": "Applicant police clearances (all relevant countries)", "applies_to": "applicant", "required": true, "form_reference": null, "guidance": "One for every country lived in 12+ months since age 16. Note each country and order early — some take weeks." },
-    { "category_key": "character", "title": "Sponsor police clearances", "applies_to": "sponsor", "required": true, "form_reference": null, "guidance": "Sponsor also provides clearances for countries lived in 12+ months since 16 (AFP check via Form 40SP covers Australia)." },
-    { "category_key": "character", "title": "Form 80 (if requested / complex history)", "applies_to": "applicant", "required": false, "form_reference": "Form 80", "guidance": "Detailed personal particulars form — include if the applicant has extensive travel/residence history." },
-
-    { "category_key": "lodgement", "title": "ImmiAccount created & application completed", "applies_to": "couple", "required": true, "form_reference": null, "guidance": "Paper applications are not accepted." },
-    { "category_key": "lodgement", "title": "Four-pillar readiness check passed", "applies_to": "couple", "required": true, "form_reference": null, "guidance": "Every pillar has solid evidence before lodging. The dashboard gate enforces this." },
-    { "category_key": "lodgement", "title": "Fee ready (AUD 11,710) & payment method", "applies_to": "couple", "required": true, "form_reference": null, "guidance": "Non-refundable. Card surcharge applies. Confirm current fee before paying." },
-    { "category_key": "lodgement", "title": "Decision-ready confirmation", "applies_to": "couple", "required": true, "form_reference": null, "guidance": "Under the April 2026 approach, lodge only when complete — follow-up requests are limited and incomplete applications risk faster refusal." }
+    {
+      "category_key": "eligibility",
+      "title": "Confirm de facto basis met",
+      "applies_to": "couple",
+      "required": true,
+      "form_reference": null,
+      "guidance": "12 months living together immediately before applying, OR compelling and compassionate circumstances. Record which one you rely on. Note that an Australian state or territory relationship registration generally does not waive the 12 months for an offshore application."
+    },
+    {
+      "category_key": "eligibility",
+      "title": "Compelling and compassionate circumstances (if relied on)",
+      "applies_to": "couple",
+      "required": false,
+      "form_reference": null,
+      "guidance": "Only if you cannot show 12 months of living together immediately before applying. Registration under an Australian state or territory law generally does not waive the 12 months for an offshore application."
+    },
+    {
+      "category_key": "eligibility",
+      "title": "Applicant is outside Australia at lodgement and at grant",
+      "applies_to": "applicant",
+      "required": true,
+      "form_reference": null,
+      "guidance": "The 309 is an offshore visa: the applicant must be outside Australia when the application is lodged AND when it is granted. Record where the applicant is living and their status there."
+    },
+    {
+      "category_key": "eligibility",
+      "title": "No bridging visa — plan the time outside Australia",
+      "applies_to": "applicant",
+      "required": true,
+      "form_reference": null,
+      "guidance": "A 309 application does not grant any right to be in Australia while it is processed, and no bridging visa is issued. The applicant may visit on a separate visitor visa, but must be outside Australia when the visa is granted. Plan travel, work and housing around this."
+    },
+    {
+      "category_key": "eligibility",
+      "title": "Sponsor eligibility & sponsorship limits",
+      "applies_to": "sponsor",
+      "required": true,
+      "form_reference": null,
+      "guidance": "Sponsor must be an Australian citizen, PR, or eligible NZ citizen; must not have sponsored 2+ partners previously; and must not have been sponsored as a partner within the last 5 years."
+    },
+    {
+      "category_key": "identity_app",
+      "title": "Applicant passport (photo/bio page)",
+      "applies_to": "applicant",
+      "required": true,
+      "form_reference": null,
+      "guidance": "Valid passport. Include all pages showing identity and any name changes."
+    },
+    {
+      "category_key": "identity_app",
+      "title": "Applicant birth certificate",
+      "applies_to": "applicant",
+      "required": true,
+      "form_reference": null,
+      "guidance": "Certified translation if not in English."
+    },
+    {
+      "category_key": "identity_app",
+      "title": "Applicant passport-style photo",
+      "applies_to": "applicant",
+      "required": true,
+      "form_reference": null,
+      "guidance": "Recent, meets DHA photo specs."
+    },
+    {
+      "category_key": "identity_app",
+      "title": "Change-of-name / prior identity documents",
+      "applies_to": "applicant",
+      "required": false,
+      "form_reference": null,
+      "guidance": "Only if the applicant has changed name or held other identity documents."
+    },
+    {
+      "category_key": "identity_spon",
+      "title": "Proof sponsor is Australian citizen / PR / eligible NZ citizen",
+      "applies_to": "sponsor",
+      "required": true,
+      "form_reference": null,
+      "guidance": "Australian passport, citizenship certificate, or visa grant showing PR/eligible NZ status."
+    },
+    {
+      "category_key": "identity_spon",
+      "title": "Sponsor birth certificate / photo ID",
+      "applies_to": "sponsor",
+      "required": true,
+      "form_reference": null,
+      "guidance": "Supports identity on Form 40SP."
+    },
+    {
+      "category_key": "financial",
+      "title": "Joint bank account statements",
+      "applies_to": "couple",
+      "required": true,
+      "form_reference": null,
+      "guidance": "Statements over time carry the most weight. Show ongoing joint use, not a token account."
+    },
+    {
+      "category_key": "financial",
+      "title": "Joint liabilities (loans, credit, insurance)",
+      "applies_to": "couple",
+      "required": false,
+      "form_reference": null,
+      "guidance": "Joint loans, shared insurance policies, one partner named on the other's policy."
+    },
+    {
+      "category_key": "financial",
+      "title": "Shared household bills / utilities in both names",
+      "applies_to": "couple",
+      "required": true,
+      "form_reference": null,
+      "guidance": "Electricity, gas, water, internet, phone showing both names or the same address."
+    },
+    {
+      "category_key": "financial",
+      "title": "Joint ownership of major assets",
+      "applies_to": "couple",
+      "required": false,
+      "form_reference": null,
+      "guidance": "Property, vehicle, or other significant shared assets."
+    },
+    {
+      "category_key": "financial",
+      "title": "Evidence of how you share finances / support each other",
+      "applies_to": "couple",
+      "required": false,
+      "form_reference": null,
+      "guidance": "Transfers between accounts, one supporting the other, shared budgeting."
+    },
+    {
+      "category_key": "household",
+      "title": "Joint lease or mortgage / property documents",
+      "applies_to": "couple",
+      "required": true,
+      "form_reference": null,
+      "guidance": "Both names on the tenancy or title. If only one name, explain in statements and support with other household evidence."
+    },
+    {
+      "category_key": "household",
+      "title": "Mail addressed to both at the same address",
+      "applies_to": "couple",
+      "required": true,
+      "form_reference": null,
+      "guidance": "A spread of correspondence over time to the shared address."
+    },
+    {
+      "category_key": "household",
+      "title": "Utility / service accounts at shared address",
+      "applies_to": "couple",
+      "required": false,
+      "form_reference": null,
+      "guidance": "Accounts, connection notices, or council correspondence tied to the home."
+    },
+    {
+      "category_key": "household",
+      "title": "Statement on division of household responsibilities",
+      "applies_to": "couple",
+      "required": false,
+      "form_reference": null,
+      "guidance": "Who does what — chores, finances, care duties. Usually covered in personal statements."
+    },
+    {
+      "category_key": "household",
+      "title": "Shared responsibility for children / dependants (if any)",
+      "applies_to": "couple",
+      "required": false,
+      "form_reference": null,
+      "guidance": "Only if applicable."
+    },
+    {
+      "category_key": "social",
+      "title": "Photos together across the relationship timeline",
+      "applies_to": "couple",
+      "required": true,
+      "form_reference": null,
+      "guidance": "Dated where possible: with family/friends, events, travel, over time — not just one occasion."
+    },
+    {
+      "category_key": "social",
+      "title": "Joint travel evidence",
+      "applies_to": "couple",
+      "required": false,
+      "form_reference": null,
+      "guidance": "Bookings, itineraries, boarding passes showing travel as a couple."
+    },
+    {
+      "category_key": "social",
+      "title": "Joint invitations / events / memberships",
+      "applies_to": "couple",
+      "required": false,
+      "form_reference": null,
+      "guidance": "Invitations addressed to both, shared club/gym memberships, joint bookings."
+    },
+    {
+      "category_key": "social",
+      "title": "Evidence you present publicly as a couple",
+      "applies_to": "couple",
+      "required": false,
+      "form_reference": null,
+      "guidance": "Social media, messages to/from friends and family acknowledging the relationship."
+    },
+    {
+      "category_key": "commitment",
+      "title": "Communication history during any separations",
+      "applies_to": "couple",
+      "required": false,
+      "form_reference": null,
+      "guidance": "Messages/calls when apart, showing a continuing relationship."
+    },
+    {
+      "category_key": "commitment",
+      "title": "Evidence of future plans together",
+      "applies_to": "couple",
+      "required": false,
+      "form_reference": null,
+      "guidance": "Wills naming each other, superannuation/insurance beneficiaries, joint long-term commitments."
+    },
+    {
+      "category_key": "commitment",
+      "title": "Relationship history timeline",
+      "applies_to": "couple",
+      "required": true,
+      "form_reference": null,
+      "guidance": "How and when you met, key milestones, when cohabitation began, decision to commit. Feeds both personal statements."
+    },
+    {
+      "category_key": "statements",
+      "title": "Applicant's personal statement",
+      "applies_to": "applicant",
+      "required": true,
+      "form_reference": null,
+      "guidance": "First-person account of the relationship across all four pillars. The AI drafter can build a first pass from your timeline."
+    },
+    {
+      "category_key": "statements",
+      "title": "Sponsor's personal statement",
+      "applies_to": "sponsor",
+      "required": true,
+      "form_reference": null,
+      "guidance": "The sponsor's own first-person account — should corroborate, not copy, the applicant's."
+    },
+    {
+      "category_key": "statements",
+      "title": "Form 888 statutory declaration #1",
+      "applies_to": "couple",
+      "required": true,
+      "form_reference": "Form 888",
+      "guidance": "From an Australian citizen or PR (16+) who knows you as a couple. Witnessed correctly."
+    },
+    {
+      "category_key": "statements",
+      "title": "Form 888 statutory declaration #2",
+      "applies_to": "couple",
+      "required": true,
+      "form_reference": "Form 888",
+      "guidance": "A second independent witness. More strong 888s = stronger social/commitment evidence."
+    },
+    {
+      "category_key": "sponsorship",
+      "title": "Sponsor application (Form 40SP)",
+      "applies_to": "sponsor",
+      "required": true,
+      "form_reference": "Form 40SP",
+      "guidance": "Lodged by the sponsor through their own ImmiAccount at the same time as the main application."
+    },
+    {
+      "category_key": "sponsorship",
+      "title": "Sponsor AFP National Police Check (Code 33)",
+      "applies_to": "sponsor",
+      "required": true,
+      "form_reference": null,
+      "guidance": "Australian Federal Police check submitted as part of Form 40SP."
+    },
+    {
+      "category_key": "health",
+      "title": "Health examination (after lodgement)",
+      "applies_to": "applicant",
+      "required": true,
+      "form_reference": null,
+      "guidance": "Do NOT book before lodging. Complete with a DHA-approved panel physician in the country where the applicant is living, once instructed through ImmiAccount."
+    },
+    {
+      "category_key": "character",
+      "title": "Applicant police clearances (all relevant countries)",
+      "applies_to": "applicant",
+      "required": true,
+      "form_reference": null,
+      "guidance": "One for every country lived in 12+ months since age 16. Note each country and order early — some take weeks."
+    },
+    {
+      "category_key": "character",
+      "title": "Sponsor police clearances",
+      "applies_to": "sponsor",
+      "required": true,
+      "form_reference": null,
+      "guidance": "Sponsor also provides clearances for countries lived in 12+ months since 16 (AFP check via Form 40SP covers Australia)."
+    },
+    {
+      "category_key": "character",
+      "title": "Form 80 (if requested / complex history)",
+      "applies_to": "applicant",
+      "required": false,
+      "form_reference": "Form 80",
+      "guidance": "Detailed personal particulars form — include if the applicant has extensive travel/residence history."
+    },
+    {
+      "category_key": "lodgement",
+      "title": "ImmiAccount created & application completed",
+      "applies_to": "couple",
+      "required": true,
+      "form_reference": null,
+      "guidance": "Paper applications are not accepted."
+    },
+    {
+      "category_key": "lodgement",
+      "title": "Four-pillar readiness check passed",
+      "applies_to": "couple",
+      "required": true,
+      "form_reference": null,
+      "guidance": "Every pillar has solid evidence before lodging. The dashboard gate enforces this."
+    },
+    {
+      "category_key": "lodgement",
+      "title": "Fee ready (AUD 11,710) & payment method",
+      "applies_to": "couple",
+      "required": true,
+      "form_reference": null,
+      "guidance": "Non-refundable. Card surcharge applies. Confirm current fee before paying."
+    },
+    {
+      "category_key": "lodgement",
+      "title": "Decision-ready confirmation",
+      "applies_to": "couple",
+      "required": true,
+      "form_reference": null,
+      "guidance": "Under the April 2026 approach, lodge only when complete — follow-up requests are limited and incomplete applications risk faster refusal."
+    }
   ]
 }

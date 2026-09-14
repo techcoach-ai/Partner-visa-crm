@@ -1,8 +1,12 @@
-# Partner Visa CRM — Australian subclass 820/801 (de facto)
+# Partner Visa CRM — Australian subclass 309/100 (offshore, de facto)
 
-Assembles an Australian onshore de facto partner visa application. Turns the
-official requirements into a tracked checklist, stores evidence against each
+Assembles an Australian **offshore** de facto partner visa application —
+subclass 309 (temporary) leading to 100 (permanent). Turns the official
+requirements into a tracked checklist, stores evidence against each
 requirement, and gates the application until it is decision-ready.
+
+The applicant must be outside Australia when the 309 is lodged and when it is
+granted, and no bridging visa is issued while it is processed.
 
 **This tool organises documents. It is not migration advice.** Verify everything
 against [immi.homeaffairs.gov.au](https://immi.homeaffairs.gov.au) and consider a
@@ -23,6 +27,12 @@ In the Supabase SQL editor, run in order:
    bucket and its owner-scoped storage policy, the `profiles` table and its
    signup trigger, indexes, and `seed_application_items()`.
 2. `seed.sql` — the 12 checklist categories and 42 items. Idempotent.
+
+If you seeded this database before 2026-09-14, also run
+`migrations/2026-09-14-offshore-309-100.sql`. `seed.sql` only inserts items
+whose title is absent, so re-running it will not rewrite the items that changed
+when the app moved from the onshore 820/801 to the offshore 309/100 — it would
+add the new ones alongside the old.
 
 Then under **Authentication → URL Configuration**, set the Site URL and add your
 deployed domains to the redirect allow-list.
@@ -56,6 +66,7 @@ npm run dev
 | --- | --- |
 | `app/(app)/dashboard` | Four-pillar gauges, readiness gate, AI gap analysis |
 | `app/(app)/checklist` | Checklist by category; item detail with upload and review |
+| `app/(app)/documents` | Every uploaded document in one place |
 | `app/(app)/assistant` | Q&A grounded in the user's own checklist |
 | `app/(app)/drafter` | Statement drafter |
 | `app/(app)/settings` | Account details and deletion |

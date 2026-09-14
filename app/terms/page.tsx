@@ -19,7 +19,7 @@ export default function TermsPage() {
             <h2 className="text-lg font-semibold">1. What this service is</h2>
             <p className="mt-2 text-muted-foreground">
               Partner Visa CRM is a document organiser for Australian partner visa
-              applications (subclass 820/801). It provides a checklist derived from publicly
+              applications (subclass 309/100). It provides a checklist derived from publicly
               available guidance, stores documents you upload against those checklist items,
               and uses automated tools to comment on them.
             </p>

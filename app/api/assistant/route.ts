@@ -55,7 +55,7 @@ export async function POST(req: Request) {
       output_config: { effort: 'low' },
       system:
         'You help someone assemble their own Australian partner visa application ' +
-        '(subclass 820/801, de facto). Answer ONLY from the checklist and rules given ' +
+        '(subclass 309/100, offshore, de facto). Answer ONLY from the checklist and rules given ' +
         'below. If the answer is not in that material, say so plainly and point them to ' +
         'immi.homeaffairs.gov.au rather than guessing. Never invent a requirement, a fee, ' +
         'a processing time or a form number. Be brief and concrete. ' +

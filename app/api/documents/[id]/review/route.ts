@@ -158,7 +158,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       max_tokens: 2000,
       output_config: { effort: 'low' },
       system:
-        'You review evidence for an Australian partner visa (subclass 820/801, de facto). ' +
+        'You review evidence for an Australian partner visa (subclass 309/100, offshore, de facto). ' +
         'Judge how well a single document supports one specific requirement across the four ' +
         'evidence pillars (financial, household, social, commitment). Be concrete and honest ' +
         'about weaknesses (e.g. single-name where joint is stronger, undated, out of date range). ' +

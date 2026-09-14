@@ -34,7 +34,7 @@ export default async function LandingPage() {
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-16">
         <div className="max-w-3xl">
           <p className="text-sm font-medium text-muted-foreground">
-            Subclass {VISA.subclass} — onshore, de facto
+            Subclass {VISA.subclass} — offshore, de facto
           </p>
           <h1 className="mt-3 text-4xl font-bold tracking-tight sm:text-5xl">
             Get your partner visa application decision-ready.

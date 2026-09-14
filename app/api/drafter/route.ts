@@ -52,7 +52,7 @@ export async function POST(req: Request) {
       output_config: { effort: 'medium' },
       system:
         'You draft personal statements for an Australian partner visa application ' +
-        '(subclass 820/801, de facto). Write two first-person statements: one from the ' +
+        '(subclass 309/100, offshore, de facto). Write two first-person statements: one from the ' +
         'applicant and one from the sponsor.\n\n' +
         'Rules:\n' +
         '- Use ONLY facts the user supplied. Never invent dates, places, events, names ' +
