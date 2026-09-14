@@ -9,7 +9,8 @@
     "lint": "next lint",
     "seed": "tsx scripts/seed.ts",
     "verify:readiness": "tsx scripts/verify-readiness.ts",
-    "verify:crypto": "tsx scripts/verify-crypto.ts"
+    "verify:crypto": "tsx scripts/verify-crypto.ts",
+    "verify:crypto-state": "tsx scripts/verify-crypto-state.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

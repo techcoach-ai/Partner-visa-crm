@@ -2,6 +2,7 @@
 
 import { useDocumentCrypto } from '@/components/crypto-provider';
 import {
+  CryptoErrorNotice,
   CryptoUnavailableNotice,
   PassphraseSetupForm,
   PassphraseUnlockForm,
@@ -22,6 +23,9 @@ export function CryptoGate({ children }: { children: React.ReactNode }) {
     return <p className="text-sm text-muted-foreground">Checking encryption…</p>;
   }
   if (status === 'unavailable') return <CryptoUnavailableNotice />;
+  // A failed load is reported as a failure. It is never shown as "locked",
+  // which would offer an unlock form with no salt behind it.
+  if (status === 'error') return <CryptoErrorNotice />;
   if (status === 'needs-setup') return <PassphraseSetupForm />;
   if (status === 'locked') return <PassphraseUnlockForm />;
   return <>{children}</>;

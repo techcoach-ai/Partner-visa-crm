@@ -35,7 +35,9 @@ export function EncryptionIndicator() {
       ? { label: 'Set up encryption', icon: ShieldAlert, tone: 'text-amber-700 dark:text-amber-400' }
       : status === 'unavailable'
         ? { label: 'Encryption unavailable', icon: ShieldAlert, tone: 'text-destructive' }
-        : { label: 'Documents locked', icon: Lock, tone: 'text-amber-700 dark:text-amber-400' };
+        : status === 'error'
+          ? { label: 'Encryption status unknown', icon: ShieldAlert, tone: 'text-destructive' }
+          : { label: 'Documents locked', icon: Lock, tone: 'text-amber-700 dark:text-amber-400' };
 
   return (
     <Link

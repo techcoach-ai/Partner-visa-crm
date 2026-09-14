@@ -382,6 +382,24 @@ drop policy if exists "own crypto - create" on user_crypto;
 create policy "own crypto - create" on user_crypto
   for insert with check (user_id = auth.uid());
 
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'user_crypto_complete'
+  ) then
+    -- The columns are already NOT NULL, so a half-written row cannot exist —
+    -- but empty strings would satisfy NOT NULL while being just as useless, and
+    -- would present a first-time user with an unlock form that cannot work.
+    alter table user_crypto add constraint user_crypto_complete check (
+      length(btrim(salt)) > 0
+      and length(btrim(verifier_iv)) > 0
+      and length(btrim(verifier_ct)) > 0
+      and iterations > 0
+    );
+  end if;
+end $$;
+
 -- No update or delete policy, deliberately. Replacing the salt would silently
 -- make every document already uploaded undecryptable. Changing a passphrase has
 -- to mean re-encrypting everything, which is a feature, not an UPDATE.

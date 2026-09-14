@@ -26,12 +26,8 @@ export interface CryptoEnvelope {
   ciphertext: string;
 }
 
-export interface UserCryptoRecord {
-  salt: string;
-  iterations: number;
-  verifier_iv: string;
-  verifier_ct: string;
-}
+// UserCryptoRecord lives in lib/crypto-state.ts, beside the state machine that
+// decides what a complete record means.
 
 function subtle(): SubtleCrypto {
   if (typeof window === 'undefined' || !window.crypto?.subtle) {

@@ -29,6 +29,28 @@ export function CryptoUnavailableNotice() {
   );
 }
 
+/** Shown when the encryption record could not be read at all. */
+export function CryptoErrorNotice() {
+  const { error, refresh } = useDocumentCrypto();
+  return (
+    <Alert variant="destructive">
+      <ShieldAlert className="h-4 w-4" />
+      <AlertTitle>Could not check your encryption settings</AlertTitle>
+      <AlertDescription>
+        <p>{error ?? 'Something went wrong reading your encryption settings.'}</p>
+        <Button
+          variant="outline"
+          size="sm"
+          className="mt-3"
+          onClick={() => void refresh()}
+        >
+          Try again
+        </Button>
+      </AlertDescription>
+    </Alert>
+  );
+}
+
 export function PassphraseSetupForm({ compact = false }: { compact?: boolean }) {
   const { setup } = useDocumentCrypto();
   const [passphrase, setPassphrase] = useState('');

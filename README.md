@@ -32,8 +32,13 @@ In the Supabase SQL editor, run in order:
 4. `migrations/2026-09-14-e2e-encryption.sql` — the `user_crypto` table and the
    document encryption envelope.
 5. `migrations/2026-09-14-filename-blinding.sql` — `name_cipher` / `name_iv`.
-6. If this database was seeded with any earlier version of `seed.sql`, also run
-   `migrations/2026-09-14-offshore-309-100.sql`. `seed.sql` only inserts
+6. `migrations/2026-09-14-crypto-state-guard.sql` — refuses an unusable
+   `user_crypto` row.
+7. If this database was seeded with any earlier version of `seed.sql`, also run
+   `migrations/2026-09-14-offshore-309-100.sql`.
+
+If Settings → Security reports that encryption is not installed on the database,
+step 4 has not been run — `user_crypto` does not exist yet. `seed.sql` only inserts
    items whose title is absent, so re-running it will not rewrite items that
    changed — it would add the new ones alongside the stale ones. The migration
    reconciles them by renaming in place, so checklist statuses and uploaded

@@ -4,6 +4,13 @@ import * as React from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { setSessionKey } from '@/lib/document-access';
 import {
+  classifyCryptoState,
+  isCompleteRecord,
+  looksLikeMissingTable,
+  type CryptoStatus,
+  type UserCryptoRecord,
+} from '@/lib/crypto-state';
+import {
   PBKDF2_ITERATIONS,
   checkVerifier,
   deriveKey,
@@ -11,15 +18,9 @@ import {
   makeVerifier,
   randomSalt,
   toBase64,
-  type UserCryptoRecord,
 } from '@/lib/crypto';
 
-export type CryptoStatus =
-  | 'loading'
-  | 'needs-setup'
-  | 'locked'
-  | 'unlocked'
-  | 'unavailable';
+export type { CryptoStatus } from '@/lib/crypto-state';
 
 interface CryptoContextValue {
   status: CryptoStatus;
@@ -41,15 +42,35 @@ export function useDocumentCrypto() {
 }
 
 export function CryptoProvider({ children }: { children: React.ReactNode }) {
-  const [status, setStatus] = React.useState<CryptoStatus>('loading');
+  // Facts, not status. The status is derived below, so no branch can set a
+  // state the facts do not support.
+  const [loaded, setLoaded] = React.useState(false);
+  const [loadFailed, setLoadFailed] = React.useState(false);
+  const [record, setRecord] = React.useState<Partial<UserCryptoRecord> | null>(null);
   const [key, setKey] = React.useState<CryptoKey | null>(null);
-  const [record, setRecord] = React.useState<UserCryptoRecord | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [cryptoAvailable, setCryptoAvailable] = React.useState(true);
+
+  React.useEffect(() => {
+    setCryptoAvailable(Boolean(window.crypto?.subtle));
+  }, []);
+
+  const status = React.useMemo(
+    () =>
+      classifyCryptoState({
+        loaded,
+        cryptoAvailable,
+        loadFailed,
+        record,
+        hasKey: key !== null,
+      }),
+    [loaded, cryptoAvailable, loadFailed, record, key],
+  );
 
   const refresh = React.useCallback(async () => {
     if (typeof window !== 'undefined' && !window.crypto?.subtle) {
-      // Web Crypto needs a secure context. Say so rather than failing obscurely.
-      setStatus('unavailable');
+      setCryptoAvailable(false);
+      setLoaded(true);
       return;
     }
 
@@ -60,78 +81,100 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
       .maybeSingle();
 
     if (loadError) {
-      setError('Could not load your encryption settings.');
-      setStatus('locked');
-      return;
-    }
-
-    if (!data) {
+      // Never fall through to 'locked': a failed read says nothing about
+      // whether setup has happened, and guessing wrong leaves a first-time user
+      // on an unlock form they cannot possibly complete.
+      setLoadFailed(true);
       setRecord(null);
-      setStatus('needs-setup');
+      setError(
+        looksLikeMissingTable(loadError)
+          ? 'Document encryption is not installed on this database yet. Run migrations/2026-09-14-e2e-encryption.sql in the Supabase SQL editor.'
+          : 'Could not load your encryption settings. Check your connection and try again.',
+      );
+      setLoaded(true);
       return;
     }
 
-    setRecord(data as UserCryptoRecord);
-    setStatus((prev) => (prev === 'unlocked' ? 'unlocked' : 'locked'));
+    setLoadFailed(false);
+    setError(null);
+    // A row missing any field means setup never completed; classifyCryptoState
+    // treats that as needs-setup rather than offering an impossible unlock.
+    setRecord(data ?? null);
+    setLoaded(true);
   }, []);
 
   React.useEffect(() => {
     void refresh();
   }, [refresh]);
 
-  const setup = React.useCallback(
-    async (passphrase: string) => {
-      setError(null);
-      try {
-        const salt = randomSalt();
-        const derived = await deriveKey(passphrase, salt, PBKDF2_ITERATIONS);
-        const verifier = await makeVerifier(derived);
+  const setup = React.useCallback(async (passphrase: string) => {
+    setError(null);
+    try {
+      const salt = randomSalt();
+      const derived = await deriveKey(passphrase, salt, PBKDF2_ITERATIONS);
+      const verifier = await makeVerifier(derived);
 
-        const supabase = createClient();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) return { error: 'You are not signed in.' };
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return { error: 'You are not signed in.' };
 
-        const row = {
-          user_id: user.id,
-          salt: toBase64(salt),
-          iterations: PBKDF2_ITERATIONS,
-          verifier_iv: verifier.iv,
-          verifier_ct: verifier.ciphertext,
-        };
+      // One INSERT with every column, so the row is either complete or absent —
+      // there is no window in which a salt exists without its verifier. The
+      // columns are NOT NULL and non-empty-checked, so the database enforces it
+      // too.
+      const row = {
+        user_id: user.id,
+        salt: toBase64(salt),
+        iterations: PBKDF2_ITERATIONS,
+        verifier_iv: verifier.iv,
+        verifier_ct: verifier.ciphertext,
+      };
 
-        const { error: insertError } = await supabase.from('user_crypto').insert(row);
-        if (insertError) {
-          // There is no update policy, so a conflict means it already exists —
-          // overwriting would strand every document already uploaded.
+      const { data: inserted, error: insertError } = await supabase
+        .from('user_crypto')
+        .insert(row)
+        .select('salt, iterations, verifier_iv, verifier_ct')
+        .single();
+
+      if (insertError || !inserted) {
+        if (looksLikeMissingTable(insertError)) {
           return {
             error:
-              'Encryption is already set up for this account. Reload and unlock instead.',
+              'Document encryption is not installed on this database yet. Run migrations/2026-09-14-e2e-encryption.sql in the Supabase SQL editor.',
           };
         }
-
-        setRecord({
-          salt: row.salt,
-          iterations: row.iterations,
-          verifier_iv: row.verifier_iv,
-          verifier_ct: row.verifier_ct,
-        });
-        setKey(derived);
-        setSessionKey(derived);
-        setStatus('unlocked');
-        return {};
-      } catch {
-        return { error: 'Could not set up encryption in this browser.' };
+        // There is no update policy, so a conflict means a passphrase already
+        // exists — overwriting would strand every document already uploaded.
+        return {
+          error:
+            'Encryption is already set up for this account. Reload the page and unlock instead.',
+        };
       }
-    },
-    [],
-  );
+
+      setRecord(inserted as UserCryptoRecord);
+      setLoadFailed(false);
+      setLoaded(true);
+      setKey(derived);
+      setSessionKey(derived);
+      return {};
+    } catch {
+      return { error: 'Could not set up encryption in this browser.' };
+    }
+  }, []);
 
   const unlock = React.useCallback(
     async (passphrase: string) => {
       setError(null);
-      if (!record) return { error: 'Encryption is not set up yet.' };
+
+      // Guard on completeness, not mere presence: a partial row cannot derive a
+      // key, and the user needs to be told to set up rather than to retype.
+      if (!isCompleteRecord(record)) {
+        return {
+          error: 'Encryption is not set up on this account yet — create a passphrase first.',
+        };
+      }
 
       try {
         const derived = await deriveKey(
@@ -150,7 +193,6 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
 
         setKey(derived);
         setSessionKey(derived);
-        setStatus('unlocked');
         return {};
       } catch {
         return { error: 'Could not unlock with that passphrase.' };
@@ -162,7 +204,6 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
   const lock = React.useCallback(() => {
     setKey(null);
     setSessionKey(null);
-    setStatus((prev) => (prev === 'unlocked' ? 'locked' : prev));
   }, []);
 
   const value = React.useMemo<CryptoContextValue>(

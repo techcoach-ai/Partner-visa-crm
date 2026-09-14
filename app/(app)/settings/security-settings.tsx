@@ -3,6 +3,7 @@
 import { Lock, LockOpen, ShieldAlert, ShieldCheck, ShieldQuestion } from 'lucide-react';
 import { useDocumentCrypto } from '@/components/crypto-provider';
 import {
+  CryptoErrorNotice,
   CryptoUnavailableNotice,
   PassphraseSetupForm,
   PassphraseUnlockForm,
@@ -42,6 +43,9 @@ export function SecuritySettings() {
         )}
 
         {status === 'unavailable' && <CryptoUnavailableNotice />}
+
+        {/* Never rendered as "locked": a failed read is not evidence of setup. */}
+        {status === 'error' && <CryptoErrorNotice />}
 
         {status === 'needs-setup' && (
           <>
@@ -139,6 +143,9 @@ function StatusBadge({ status }: { status: ReturnType<typeof useDocumentCrypto>[
   }
   if (status === 'unavailable') {
     return <Badge variant="destructive">Unavailable</Badge>;
+  }
+  if (status === 'error') {
+    return <Badge variant="destructive">Unknown</Badge>;
   }
   return <Badge variant="outline">Checking…</Badge>;
 }
