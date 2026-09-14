@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { requireApplication, getChecklistEntries } from '@/lib/queries';
 import { DocumentLibrary, type LibraryRow } from './document-library';
+import { CryptoGate } from '@/components/crypto-gate';
 
 export const metadata: Metadata = { title: 'Documents — Partner Visa CRM' };
 
@@ -19,6 +20,8 @@ export default async function DocumentsPage() {
         sizeBytes: doc.size_bytes,
         verdict: doc.ai_verdict ?? 'pending',
         notes: doc.ai_notes,
+        encrypted: Boolean(doc.encrypted),
+        iv: doc.iv,
         uploadedAt: doc.uploaded_at,
         entryId: entry.id,
         requirement: entry.checklist_item.title,
@@ -34,9 +37,12 @@ export default async function DocumentsPage() {
         <h1 className="text-2xl font-bold tracking-tight">Documents</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Every file you&apos;ve uploaded, and the requirement it was filed against.
+          Files are decrypted in your browser when you open them.
         </p>
       </div>
-      <DocumentLibrary rows={rows} />
+      <CryptoGate>
+        <DocumentLibrary rows={rows} />
+      </CryptoGate>
     </div>
   );
 }

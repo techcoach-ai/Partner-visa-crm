@@ -7,6 +7,7 @@ import { PILLAR_LABELS, type Pillar } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ItemDetail } from './item-detail';
+import { CryptoGate } from '@/components/crypto-gate';
 
 export const metadata: Metadata = { title: 'Requirement — Partner Visa CRM' };
 
@@ -68,14 +69,16 @@ export default async function ItemPage({ params }: { params: { entryId: string }
         </Card>
       )}
 
-      <ItemDetail
-        entryId={entry.id}
-        applicationId={application.id}
-        itemId={entry.item_id}
-        status={entry.status}
-        notes={entry.notes}
-        documents={entry.documents}
-      />
+      <CryptoGate>
+        <ItemDetail
+          entryId={entry.id}
+          applicationId={application.id}
+          itemId={entry.item_id}
+          status={entry.status}
+          notes={entry.notes}
+          documents={entry.documents}
+        />
+      </CryptoGate>
     </div>
   );
 }

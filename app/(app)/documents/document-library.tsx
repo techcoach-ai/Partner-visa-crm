@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Download, FileText, Search } from 'lucide-react';
+import { Download, ExternalLink, FileText, Search } from 'lucide-react';
+import { downloadDocument, openDocument } from '@/lib/document-access';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -18,6 +19,8 @@ export interface LibraryRow {
   sizeBytes: number | null;
   verdict: AiVerdict;
   notes: string | null;
+  encrypted: boolean;
+  iv: string | null;
   uploadedAt: string;
   entryId: string;
   requirement: string;
@@ -47,13 +50,19 @@ export function DocumentLibrary({ rows }: { rows: LibraryRow[] }) {
     );
   }, [rows, query]);
 
-  async function open(documentId: string) {
+  /** Decrypted in the browser; the server only ever held ciphertext. */
+  async function act(row: LibraryRow, how: 'open' | 'download') {
     setError(null);
+    const doc = {
+      id: row.id,
+      file_name: row.fileName,
+      mime_type: row.mimeType,
+      encrypted: row.encrypted,
+      iv: row.iv,
+    };
     try {
-      const res = await fetch(`/api/documents/${documentId}/signed-url`);
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? 'Could not open the file.');
-      window.open(json.url, '_blank', 'noopener,noreferrer');
+      if (how === 'open') await openDocument(doc);
+      else await downloadDocument(doc);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not open the file.');
     }
@@ -108,7 +117,8 @@ export function DocumentLibrary({ rows }: { rows: LibraryRow[] }) {
                     <p className="truncate text-sm font-medium">{row.fileName}</p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       {formatBytes(row.sizeBytes)}
-                      {row.mimeType ? ` · ${row.mimeType}` : ''} ·{' '}
+                      {row.mimeType ? ` · ${row.mimeType}` : ''}
+                      {row.encrypted ? ' · encrypted' : ''} ·{' '}
                       {new Date(row.uploadedAt).toLocaleDateString('en-AU', {
                         day: 'numeric',
                         month: 'short',
@@ -131,9 +141,13 @@ export function DocumentLibrary({ rows }: { rows: LibraryRow[] }) {
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <VerdictPill verdict={row.verdict} />
-                    <Button size="sm" variant="ghost" onClick={() => void open(row.id)}>
-                      <Download className="h-4 w-4" />
+                    <Button size="sm" variant="ghost" onClick={() => void act(row, 'open')}>
+                      <ExternalLink className="h-4 w-4" />
                       <span className="sr-only">Open {row.fileName}</span>
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => void act(row, 'download')}>
+                      <Download className="h-4 w-4" />
+                      <span className="sr-only">Download {row.fileName}</span>
                     </Button>
                   </div>
                 </div>

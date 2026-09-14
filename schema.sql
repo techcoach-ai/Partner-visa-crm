@@ -115,8 +115,15 @@ create policy "read templates - items"      on checklist_items      for select u
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
   'visa-documents', 'visa-documents', false,
-  20971520,  -- 20 MB
-  array['application/pdf','image/jpeg','image/png','image/gif','image/webp']
+  -- 21 MB: the plaintext cap is 20 MB, and AES-GCM appends a 16-byte
+  -- authentication tag, so an exactly-20 MB file would fail a 20 MB ceiling.
+  22020096,
+  -- application/octet-stream is what an encrypted upload is: opaque bytes. The
+  -- real type is kept in documents.mime_type, which describes the plaintext.
+  array[
+    'application/octet-stream',
+    'application/pdf','image/jpeg','image/png','image/gif','image/webp'
+  ]
 )
 on conflict (id) do update set
   public = false,
@@ -347,3 +354,49 @@ drop trigger if exists documents_enforce_path on documents;
 create trigger documents_enforce_path
   before insert or update of storage_path, application_item_id on documents
   for each row execute function enforce_document_path();
+
+-- ── End-to-end encryption ────────────────────────────────────────────────────
+-- Documents are encrypted in the browser before upload. The server stores
+-- ciphertext and never sees the passphrase or the key derived from it.
+--
+-- The salt is public by design: it is not a secret, it only stops one
+-- precomputed table working against every user. What protects the documents is
+-- the passphrase, which exists nowhere but in the user's head and, for the life
+-- of a tab, in memory.
+create table if not exists user_crypto (
+  user_id     uuid primary key references auth.users(id) on delete cascade,
+  salt        text not null,          -- base64, 16 bytes
+  iterations  int  not null,          -- PBKDF2 rounds used, so it can be raised later
+  verifier_iv text not null,          -- base64
+  verifier_ct text not null,          -- base64: known plaintext under the derived key
+  created_at  timestamptz not null default now()
+);
+
+alter table user_crypto enable row level security;
+
+drop policy if exists "own crypto - read" on user_crypto;
+create policy "own crypto - read" on user_crypto
+  for select using (user_id = auth.uid());
+
+drop policy if exists "own crypto - create" on user_crypto;
+create policy "own crypto - create" on user_crypto
+  for insert with check (user_id = auth.uid());
+
+-- No update or delete policy, deliberately. Replacing the salt would silently
+-- make every document already uploaded undecryptable. Changing a passphrase has
+-- to mean re-encrypting everything, which is a feature, not an UPDATE.
+
+-- ── Document envelope ────────────────────────────────────────────────────────
+alter table documents add column if not exists encrypted boolean not null default false;
+alter table documents add column if not exists iv text;  -- base64, per file
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'documents_iv_present'
+  ) then
+    -- An encrypted row without its IV is unrecoverable data. Refuse to store one.
+    alter table documents add constraint documents_iv_present
+      check (not encrypted or iv is not null);
+  end if;
+end $$;

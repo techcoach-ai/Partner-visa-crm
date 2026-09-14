@@ -1,29 +1,41 @@
 /**
  * Document review route — POST /api/documents/[id]/review
  *
- * Pulls the uploaded file from the private `visa-documents` bucket, sends it to
- * the Anthropic API alongside the requirement it's attached to, and writes the
- * verdict + notes back to the documents row. RLS-scoped to the signed-in user.
+ * Documents are encrypted in the browser, so the server cannot read them from
+ * storage any more. The client decrypts locally and posts the plaintext as
+ * base64; this route forwards it to the Anthropic API **in memory** and saves
+ * only the verdict and notes.
+ *
+ * The plaintext is never written to storage, never written to disk, and never
+ * logged. It exists for the life of this request and nowhere else.
+ *
+ * A consequence of end-to-end encryption worth naming: the server cannot verify
+ * that the bytes it is given are the bytes held in storage for this document.
+ * Only the holder of the passphrase could, and they are the one sending them.
+ * The review is advisory and attached to a row the caller already owns, so this
+ * buys an attacker nothing but a review of their own file.
  */
 import { NextResponse } from 'next/server';
 import {
   anthropic,
-  BUCKET,
-  MAX_REVIEW_FILE_BYTES,
   NOT_ADVICE_RULE,
   parseJsonObject,
   REVIEW_MODEL,
-  SUPPORTED_IMAGE_TYPES,
   textOf,
 } from '@/lib/ai';
 import { consumeRateLimit, rateLimitMessage } from '@/lib/rate-limit';
 import { createClient } from '@/lib/supabase/server';
+import { REVIEW_MAX_PLAINTEXT_BYTES, isAllowedMimeType } from '@/lib/storage';
 import type { AiVerdict } from '@/lib/types';
 
-// Reviewing a PDF with Opus runs well past Vercel's default function limit.
 export const maxDuration = 60;
 
-/** Shape of the embedded relations PostgREST returns for the select below. */
+interface ReviewJson {
+  verdict?: string;
+  notes?: string;
+  pillar_strengthened?: string;
+}
+
 interface ReviewDocRow {
   application_item: {
     checklist_item: {
@@ -34,36 +46,29 @@ interface ReviewDocRow {
   } | null;
 }
 
-interface ReviewJson {
-  verdict?: string;
-  notes?: string;
-  pillar_strengthened?: string;
-}
-
 /** Records a terminal state on the document and returns it to the caller. */
 async function settle(
   supabase: ReturnType<typeof createClient>,
   id: string,
   verdict: AiVerdict,
   notes: string,
-  status = 200,
 ) {
   const { error } = await supabase
     .from('documents')
     .update({ ai_verdict: verdict, ai_notes: notes })
-    .eq('id', id);
+    .eq('id', id)
+    .select('id');
 
-  // A failed write means the UI would show a verdict that was never saved.
   if (error) {
     return NextResponse.json(
-      { error: `Review completed but could not be saved: ${error.message}` },
+      { error: 'Review completed but could not be saved.' },
       { status: 500 },
     );
   }
-  return NextResponse.json({ verdict, notes }, { status });
+  return NextResponse.json({ verdict, notes });
 }
 
-export async function POST(_req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: { id: string } }) {
   const supabase = createClient();
 
   const {
@@ -76,12 +81,13 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     return NextResponse.json({ error: rateLimitMessage('review') }, { status: 429 });
   }
 
-  // 1) Load the document + its requirement (RLS ensures the user owns it).
+  // 1) The requirement this document is filed against. RLS proves ownership:
+  //    a row that comes back belongs to the caller.
   const { data: doc, error } = await supabase
     .from('documents')
     .select(
       `
-      id, storage_path, mime_type, file_name, size_bytes,
+      id, file_name,
       application_item:application_items (
         checklist_item:checklist_items ( title, guidance, category:checklist_categories ( pillar ) )
       )
@@ -96,71 +102,69 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   const requirement = item?.title ?? 'the attached requirement';
   const guidance = item?.guidance ?? '';
   const pillar = item?.category?.pillar ?? 'admin';
-  const mime = doc.mime_type ?? '';
 
-  // 2) Decide up front whether this file can be reviewed at all.
-  const isPdf = mime === 'application/pdf';
-  const isImage = (SUPPORTED_IMAGE_TYPES as readonly string[]).includes(mime);
+  // 2) The plaintext, supplied by the client because only it can decrypt.
+  const body = await req.json().catch(() => null);
+  const dataBase64 = typeof body?.data === 'string' ? body.data : '';
+  const mime = typeof body?.mimeType === 'string' ? body.mimeType : '';
 
-  if (!isPdf && !isImage) {
-    // Covers .docx and, importantly, iPhone HEIC photos — which would
-    // otherwise be rejected by the API rather than landing here.
+  if (!dataBase64) {
+    return NextResponse.json({ error: 'No document content was sent.' }, { status: 400 });
+  }
+  if (!isAllowedMimeType(mime)) {
     return settle(
       supabase,
-      doc.id,
+      doc.id as string,
       'pending',
       `Automated review supports PDF, JPEG, PNG, GIF and WebP files. Convert "${doc.file_name}" and re-run.`,
     );
   }
 
-  if (doc.size_bytes && doc.size_bytes > MAX_REVIEW_FILE_BYTES) {
+  let bytes: Buffer;
+  try {
+    bytes = Buffer.from(dataBase64, 'base64');
+  } catch {
+    return NextResponse.json({ error: 'Document content was malformed.' }, { status: 400 });
+  }
+
+  if (bytes.byteLength === 0) {
+    return NextResponse.json({ error: 'Document content was empty.' }, { status: 400 });
+  }
+  if (bytes.byteLength > REVIEW_MAX_PLAINTEXT_BYTES) {
     return settle(
       supabase,
-      doc.id,
+      doc.id as string,
       'pending',
-      `"${doc.file_name}" is too large to review automatically. Split it or reduce it below 20 MB and re-run.`,
+      `"${doc.file_name}" is too large to review automatically (limit 3 MB). It is stored safely — only the review is limited.`,
     );
   }
 
-  // 3) Download the file bytes.
-  const { data: file, error: dlErr } = await supabase.storage
-    .from(BUCKET)
-    .download(doc.storage_path);
-  if (dlErr || !file) return NextResponse.json({ error: 'Download failed' }, { status: 500 });
-
-  const bytes = await file.arrayBuffer();
-  if (bytes.byteLength > MAX_REVIEW_FILE_BYTES) {
-    return settle(
-      supabase,
-      doc.id,
-      'pending',
-      `"${doc.file_name}" is too large to review automatically. Split it or reduce it below 20 MB and re-run.`,
-    );
-  }
-
-  const base64 = Buffer.from(bytes).toString('base64');
+  const isPdf = mime === 'application/pdf';
   const block = isPdf
     ? {
         type: 'document' as const,
-        source: { type: 'base64' as const, media_type: 'application/pdf' as const, data: base64 },
+        source: {
+          type: 'base64' as const,
+          media_type: 'application/pdf' as const,
+          data: dataBase64,
+        },
       }
     : {
         type: 'image' as const,
         source: {
           type: 'base64' as const,
-          media_type: mime as (typeof SUPPORTED_IMAGE_TYPES)[number],
-          data: base64,
+          media_type: mime as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+          data: dataBase64,
         },
       };
 
-  // 4) Ask the model. JSON only.
+  // 3) Ask the model. JSON only.
   let raw: string;
   try {
     const msg = await anthropic().messages.create({
       model: REVIEW_MODEL,
-      // Thinking is on by default and its tokens count against this budget.
-      // 700 was not enough to reason and then emit the JSON, which truncated
-      // the response and made every review parse as an error.
+      // Thinking is on by default and its tokens share this budget; too small a
+      // number truncates the JSON and every review parses as an error.
       max_tokens: 2000,
       output_config: { effort: 'low' },
       system:
@@ -185,12 +189,17 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       ],
     });
     raw = textOf(msg);
-  } catch (e) {
-    const message = e instanceof Error ? e.message : 'Unknown error';
-    return settle(supabase, doc.id, 'error', `Review could not be completed: ${message}`);
+  } catch {
+    // Deliberately not echoing the provider error: it can quote request content.
+    return settle(
+      supabase,
+      doc.id as string,
+      'error',
+      'Review could not be completed. Try again shortly.',
+    );
   }
 
-  // 5) Parse defensively.
+  // 4) Parse defensively.
   const parsed = parseJsonObject<ReviewJson>(raw);
   const verdict: AiVerdict = ['satisfies', 'partial', 'insufficient'].includes(
     parsed?.verdict ?? '',
@@ -199,9 +208,9 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     : 'error';
 
   const notes =
-    parsed?.notes ??
-    (verdict === 'error' ? 'Could not parse the review output.' : '');
+    parsed?.notes ?? (verdict === 'error' ? 'Could not parse the review output.' : '');
 
-  // 6) Persist.
-  return settle(supabase, doc.id, verdict, notes);
+  // 5) Persist the verdict only. The plaintext goes out of scope here and is
+  //    never written anywhere.
+  return settle(supabase, doc.id as string, verdict, notes);
 }

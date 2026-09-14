@@ -93,6 +93,10 @@ export interface DocumentRow {
   ai_verdict: AiVerdict | null;
   ai_notes: string | null;
   uploaded_at: string;
+  /** True when the stored object is AES-GCM ciphertext. */
+  encrypted: boolean;
+  /** base64 IV for that ciphertext; null only on pre-encryption rows. */
+  iv: string | null;
 }
 
 export interface ApplicationItem {

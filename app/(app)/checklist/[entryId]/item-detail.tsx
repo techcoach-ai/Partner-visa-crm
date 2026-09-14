@@ -2,13 +2,28 @@
 
 import { useState, useTransition, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Download, Loader2, Sparkles, Trash2, Upload } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
+import {
+  Download,
+  ExternalLink,
+  Loader2,
+  Lock,
+  Sparkles,
+  Trash2,
+  Upload,
+} from 'lucide-react';
+import { encryptBytes, toBase64 } from '@/lib/crypto';
+import { useDocumentCrypto } from '@/components/crypto-provider';
+import {
+  downloadDocument,
+  openDocument,
+  plaintextBase64,
+  uploadCiphertext,
+} from '@/lib/document-access';
 import { setItemStatus, setItemNotes, deleteDocument, recordDocument } from '../actions';
 import {
   ALLOWED_TYPES_LABEL,
-  BUCKET,
   MAX_UPLOAD_BYTES,
+  REVIEW_MAX_PLAINTEXT_BYTES,
   isAllowedMimeType,
   sanitiseFileName,
 } from '@/lib/storage';
@@ -63,6 +78,7 @@ export function ItemDetail({
   documents: DocumentRow[];
 }) {
   const router = useRouter();
+  const { key: cryptoKey } = useDocumentCrypto();
   const [, startTransition] = useTransition();
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -75,10 +91,13 @@ export function ItemDetail({
 
   async function upload(files: FileList | null) {
     if (!files || files.length === 0) return;
+    if (!cryptoKey) {
+      setError('Unlock your documents before uploading.');
+      return;
+    }
+
     setError(null);
     setUploading(true);
-
-    const supabase = createClient();
 
     for (const file of Array.from(files)) {
       // Advisory only — the bucket enforces both limits itself, and the server
@@ -94,29 +113,39 @@ export function ItemDetail({
 
       const path = `${applicationId}/${itemId}/${Date.now()}-${sanitiseFileName(file.name)}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from(BUCKET)
-        .upload(path, file, { contentType: file.type, upsert: false });
+      // Encrypt here, in the browser. Only ciphertext is ever uploaded.
+      let iv: Uint8Array;
+      let ciphertext: Uint8Array;
+      try {
+        const plaintext = new Uint8Array(await file.arrayBuffer());
+        ({ iv, ciphertext } = await encryptBytes(cryptoKey, plaintext));
+      } catch {
+        setError(`Could not encrypt "${file.name}".`);
+        continue;
+      }
 
-      if (uploadError) {
-        setError(`Could not upload "${file.name}": ${uploadError.message}`);
+      const uploaded = await uploadCiphertext(path, ciphertext);
+      if (uploaded.error) {
+        setError(`Could not upload "${file.name}": ${uploaded.error}`);
         continue;
       }
 
       // The row is written server-side, where the path is verified against the
-      // folder for this item. The browser never gets to choose where a
-      // documents row points.
+      // folder for this item. mime_type and size describe the PLAINTEXT, so the
+      // file can be rendered correctly once decrypted.
       const result = await recordDocument({
         entryId,
         storagePath: path,
         fileName: file.name,
         mimeType: file.type,
         sizeBytes: file.size,
+        encrypted: true,
+        iv: toBase64(iv),
       });
 
       if (result.error) {
         // Don't leave the object behind with no row pointing at it.
-        await supabase.storage.from(BUCKET).remove([path]);
+        await removeOrphan(path);
         setError(`Could not record "${file.name}": ${result.error}`);
         continue;
       }
@@ -133,11 +162,29 @@ export function ItemDetail({
     router.refresh();
   }
 
-  async function review(documentId: string) {
-    setReviewing(documentId);
+  async function review(doc: DocumentRow) {
+    setReviewing(doc.id);
     setError(null);
     try {
-      const res = await fetch(`/api/documents/${documentId}/review`, { method: 'POST' });
+      if (doc.encrypted && !cryptoKey) {
+        throw new Error('Unlock your documents before running a review.');
+      }
+      if (doc.size_bytes && doc.size_bytes > REVIEW_MAX_PLAINTEXT_BYTES) {
+        throw new Error(
+          'This file is too large to review automatically (limit 3 MB). It is stored safely — only the review is limited.',
+        );
+      }
+
+      // Decrypted here and sent straight to our route, which holds it in memory
+      // and saves only the verdict. The server can no longer read it from
+      // storage, because storage only ever held ciphertext.
+      const data = await plaintextBase64(doc);
+
+      const res = await fetch(`/api/documents/${doc.id}/review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data, mimeType: doc.mime_type ?? '' }),
+      });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Review failed.');
       router.refresh();
@@ -148,16 +195,29 @@ export function ItemDetail({
     }
   }
 
-  async function open(documentId: string) {
+  async function open(doc: DocumentRow) {
     setError(null);
     try {
-      const res = await fetch(`/api/documents/${documentId}/signed-url`);
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? 'Could not open the file.');
-      window.open(json.url, '_blank', 'noopener,noreferrer');
+      await openDocument(doc);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not open the file.');
     }
+  }
+
+  async function download(doc: DocumentRow) {
+    setError(null);
+    try {
+      await downloadDocument(doc);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not download the file.');
+    }
+  }
+
+  /** Removes a stored object when its row could not be written. */
+  async function removeOrphan(path: string) {
+    const { createClient } = await import('@/lib/supabase/client');
+    const { BUCKET } = await import('@/lib/storage');
+    await createClient().storage.from(BUCKET).remove([path]);
   }
 
   return (
@@ -235,6 +295,10 @@ export function ItemDetail({
             <p className="mt-1 text-xs text-muted-foreground">
               {ALLOWED_TYPES_LABEL} only. Up to 20 MB each.
             </p>
+            <p className="mt-1 flex items-center justify-center gap-1 text-xs text-muted-foreground">
+              <Lock className="h-3 w-3" />
+              Encrypted on this device before upload
+            </p>
             <input
               ref={fileInput}
               type="file"
@@ -260,22 +324,33 @@ export function ItemDetail({
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">{doc.file_name}</p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="flex items-center gap-1 text-xs text-muted-foreground">
                         {formatBytes(doc.size_bytes)}
                         {doc.mime_type ? ` · ${doc.mime_type}` : ''}
+                        {doc.encrypted && (
+                          <>
+                            {' · '}
+                            <Lock className="h-3 w-3" />
+                            Encrypted
+                          </>
+                        )}
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       <VerdictPill verdict={(doc.ai_verdict ?? 'pending') as AiVerdict} />
-                      <Button size="sm" variant="ghost" onClick={() => void open(doc.id)}>
+                      <Button size="sm" variant="ghost" onClick={() => void open(doc)}>
+                        <ExternalLink className="h-4 w-4" />
+                        <span className="sr-only">Open {doc.file_name}</span>
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => void download(doc)}>
                         <Download className="h-4 w-4" />
-                        <span className="sr-only">Open</span>
+                        <span className="sr-only">Download {doc.file_name}</span>
                       </Button>
                       <Button
                         size="sm"
                         variant="outline"
                         disabled={reviewing === doc.id}
-                        onClick={() => void review(doc.id)}
+                        onClick={() => void review(doc)}
                       >
                         {reviewing === doc.id ? (
                           <Loader2 className="h-4 w-4 animate-spin" />

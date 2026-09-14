@@ -252,3 +252,64 @@ These cannot be fixed from the repository:
 3. **M2** — confirm "Confirm email" is ON in Authentication → Providers → Email.
 4. **The two-account isolation test** in the README remains the decisive
    verification and has still not been run against a live database.
+
+
+---
+
+## Addendum — end-to-end encryption (2026-09-14)
+
+Documents are now encrypted in the browser before upload. This changes the
+threat model materially: a compromise of the database or the storage bucket
+yields ciphertext, and the passphrase that unlocks it exists nowhere on the
+server. Several findings above are strengthened as a result — a leaked signed
+URL now yields an encrypted blob rather than a passport scan.
+
+Properties, and their limits:
+
+| | |
+|---|---|
+| Key derivation | PBKDF2-SHA256, 250,000 iterations, per-user 16-byte random salt |
+| Cipher | AES-GCM 256, fresh 12-byte IV per file, authenticated |
+| Key handling | derived **non-extractable**; held in React state for the tab only; never in localStorage, sessionStorage or IndexedDB, so never on disk |
+| Server knowledge | salt, IV, filename, MIME type, plaintext size, and the ciphertext |
+| Recovery | none, by design — a lost passphrase means unrecoverable uploads |
+
+**`user_crypto` is append-only.** Select and insert policies, no update policy.
+Verified with grants in place so RLS is what blocks it, not a missing GRANT: a
+user reads their own row, `UPDATE` and `DELETE` affect zero rows, and a second
+user sees none. Without this, replacing a salt would silently strand every
+document already uploaded.
+
+**Two of the security fixes above would have broken this**, and were corrected
+in the same change: the bucket's `allowed_mime_types` had to admit
+`application/octet-stream` (ciphertext has no meaningful type), and its 20 MB
+ceiling had to rise to 21 MB because AES-GCM appends a 16-byte tag, so an
+exactly-20 MB file would have been rejected.
+
+### Accepted consequences
+
+- **The server cannot verify that reviewed bytes match stored bytes.** Only the
+  passphrase holder can decrypt, and they are the one posting. The review is
+  advisory and attaches to a row the caller already owns, so this buys an
+  attacker nothing but a review of their own file. Inherent to E2E, not a defect.
+- **AI review is capped at 3 MB of plaintext**, because the browser must now post
+  the file and serverless bodies are limited. Uploads remain 20 MB.
+- **Metadata is not encrypted.** Filenames, MIME types and sizes are readable
+  server-side. A filename like `passport-scan.pdf` still leaks its subject.
+- **This does not defend against a compromised client.** Code served by the app
+  could capture the passphrase. E2E encryption protects data at rest on the
+  server; it does not protect against the server serving hostile JavaScript.
+
+### Verified
+
+`npm run verify:crypto` — 14 assertions against Node's Web Crypto, the same
+SubtleCrypto the browser implements: key is non-extractable, ciphertext is
+plaintext + 16-byte tag, round-trip is byte-exact, base64 survives a payload
+larger than the chunk boundary, a wrong passphrase is **rejected rather than
+silently wrong**, the same passphrase with a different salt cannot decrypt,
+tampered ciphertext fails the auth tag, the verifier accepts the right key and
+rejects the wrong one, and a fresh IV is used per file.
+
+Database behaviour verified on PostgreSQL 16: an encrypted row without its IV is
+rejected by `documents_iv_present`, legacy plaintext rows still insert, and the
+migration applies cleanly over the previous schema.

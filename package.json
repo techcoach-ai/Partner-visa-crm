@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "seed": "tsx scripts/seed.ts",
-    "verify:readiness": "tsx scripts/verify-readiness.ts"
+    "verify:readiness": "tsx scripts/verify-readiness.ts",
+    "verify:crypto": "tsx scripts/verify-crypto.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

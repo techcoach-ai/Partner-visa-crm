@@ -117,8 +117,13 @@ export async function recordDocument(input: {
   entryId: string;
   storagePath: string;
   fileName: string;
+  /** The ORIGINAL type of the plaintext, not the stored object's octet-stream. */
   mimeType: string;
+  /** Plaintext length, so the UI can show a true size. */
   sizeBytes: number;
+  encrypted: boolean;
+  /** base64, required when encrypted. */
+  iv: string | null;
 }): Promise<ActionResult & { documentId?: string }> {
   const { supabase, user } = await requireUserClient();
   if (!user) return { error: 'Not signed in.' };
@@ -131,6 +136,12 @@ export async function recordDocument(input: {
     return { error: 'That file path is not valid for this item.' };
   }
 
+  // An encrypted row without its IV is unrecoverable data. The database has the
+  // same constraint; this is the layer that gives a readable error.
+  if (input.encrypted && !input.iv) {
+    return { error: 'Encrypted uploads must record their IV.' };
+  }
+
   const { data, error } = await supabase
     .from('documents')
     .insert({
@@ -139,6 +150,8 @@ export async function recordDocument(input: {
       file_name: input.fileName.slice(0, 255),
       mime_type: input.mimeType || null,
       size_bytes: input.sizeBytes,
+      encrypted: input.encrypted,
+      iv: input.iv,
     })
     .select('id')
     .single();

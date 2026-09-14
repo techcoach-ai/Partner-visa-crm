@@ -31,6 +31,18 @@ export function isAllowedMimeType(mime: string): mime is AllowedMimeType {
 export const ALLOWED_TYPES_LABEL = 'PDF, JPEG, PNG, GIF or WebP';
 
 /**
+ * Cap on the plaintext sent to the AI review route.
+ *
+ * Because documents are end-to-end encrypted, the server cannot read them from
+ * storage — the browser decrypts and posts them instead. Serverless request
+ * bodies are capped (~4.5 MB on Vercel) and base64 inflates by a third, so
+ * 3 MB of plaintext lands around 4 MB encoded and stays clear of the ceiling.
+ *
+ * Uploads are still MAX_UPLOAD_BYTES; only automated review is limited.
+ */
+export const REVIEW_MAX_PLAINTEXT_BYTES = 3 * 1024 * 1024;
+
+/**
  * Strips anything that could be meaningful to a path or a shell, so an upload
  * cannot escape its folder or smuggle separators into the object key.
  */

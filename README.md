@@ -27,8 +27,12 @@ In the Supabase SQL editor, run in order:
    bucket and its owner-scoped storage policy, the `profiles` table and its
    signup trigger, indexes, and `seed_application_items()`.
 2. `seed.sql` — the 12 checklist categories and 41 items. Idempotent.
-3. If this database was seeded with any earlier version of `seed.sql`, run
-   `migrations/2026-09-14-offshore-309-100.sql` third. `seed.sql` only inserts
+3. `migrations/2026-09-14-security-hardening.sql` — bucket limits, the
+   document path trigger, rate limiting, storage RLS.
+4. `migrations/2026-09-14-e2e-encryption.sql` — the `user_crypto` table and the
+   document encryption envelope.
+5. If this database was seeded with any earlier version of `seed.sql`, also run
+   `migrations/2026-09-14-offshore-309-100.sql`. `seed.sql` only inserts
    items whose title is absent, so re-running it will not rewrite items that
    changed — it would add the new ones alongside the stale ones. The migration
    reconciles them by renaming in place, so checklist statuses and uploaded
@@ -83,6 +87,49 @@ An application is **decision-ready** only when:
 
 `not_applicable` counts as done by design — a couple with no children should not
 be blocked by the children item.
+
+## Document encryption
+
+Uploaded documents are encrypted in the browser before they leave the device.
+
+- A 256-bit AES-GCM key is derived from the user's passphrase with PBKDF2-SHA256
+  at 250,000 iterations, using a per-user random salt held in `user_crypto`.
+- The key is derived **non-extractable** and lives in memory for the tab only.
+  It is never written to `localStorage`, `sessionStorage` or IndexedDB, so it
+  never touches disk. Closing the tab locks the documents again.
+- The passphrase and the key are never sent to the server. The salt is public —
+  it stops one precomputed table working against every user and reveals nothing
+  on its own.
+- Each file gets a fresh 12-byte IV. Only ciphertext is uploaded; `mime_type`,
+  `file_name` and `size_bytes` describe the plaintext so files can be rendered
+  once decrypted.
+
+**If the passphrase is lost, the uploaded copies cannot be recovered by anyone,
+including us.** That is the point of the design, and the setup screen requires
+the user to acknowledge it. Keep your originals.
+
+`user_crypto` has select and insert policies but deliberately **no update
+policy**: replacing a salt would silently strand every document already
+uploaded. Changing a passphrase has to mean re-encrypting everything.
+
+### AI review under encryption
+
+The review route can no longer read files from storage, because storage only
+holds ciphertext. Instead the browser decrypts locally and posts the plaintext
+to `/api/documents/[id]/review`, which forwards it to the Anthropic API in
+memory and saves only `ai_verdict` and `ai_notes`. The plaintext is never
+written to storage, disk or logs.
+
+Two consequences worth knowing:
+
+- Review is capped at **3 MB of plaintext** because serverless request bodies
+  are limited and base64 inflates by a third. Uploads are still 20 MB — larger
+  files store and open normally, they just cannot be reviewed automatically.
+- The server cannot verify that the bytes it reviews are the bytes in storage.
+  Only the passphrase holder could, and they are the one sending them. The
+  review is advisory and attached to a row the caller already owns.
+
+The statement drafter and Q&A assistant are unchanged — they never handled files.
 
 ## Isolation
 
