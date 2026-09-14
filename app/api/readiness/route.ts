@@ -9,6 +9,7 @@ import { anthropic, CHAT_MODEL, NOT_ADVICE_RULE, parseJsonObject, textOf } from 
 import { buildPillarEvidence } from '@/lib/ai-context';
 import { computeReadiness } from '@/lib/readiness';
 import { getApplication, getChecklistEntries } from '@/lib/queries';
+import { consumeRateLimit, rateLimitMessage } from '@/lib/rate-limit';
 import { createClient } from '@/lib/supabase/server';
 import { PILLAR_LABELS } from '@/lib/types';
 
@@ -27,6 +28,11 @@ export async function POST() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
+
+  // Bounded per user, counted in the database. Fails closed.
+  if (!(await consumeRateLimit('readiness'))) {
+    return NextResponse.json({ error: rateLimitMessage('readiness') }, { status: 429 });
+  }
 
   const application = await getApplication();
   if (!application) return NextResponse.json({ error: 'No application' }, { status: 404 });

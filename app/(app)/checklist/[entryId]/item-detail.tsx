@@ -4,7 +4,14 @@ import { useState, useTransition, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Download, Loader2, Sparkles, Trash2, Upload } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import { setItemStatus, setItemNotes, deleteDocument } from '../actions';
+import { setItemStatus, setItemNotes, deleteDocument, recordDocument } from '../actions';
+import {
+  ALLOWED_TYPES_LABEL,
+  BUCKET,
+  MAX_UPLOAD_BYTES,
+  isAllowedMimeType,
+  sanitiseFileName,
+} from '@/lib/storage';
 import {
   STATUS_LABELS,
   type AiVerdict,
@@ -32,8 +39,6 @@ const STATUSES: ItemStatus[] = [
   'verified',
   'not_applicable',
 ];
-
-const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 
 function formatBytes(n: number | null) {
   if (!n) return '';
@@ -76,36 +81,43 @@ export function ItemDetail({
     const supabase = createClient();
 
     for (const file of Array.from(files)) {
+      // Advisory only — the bucket enforces both limits itself, and the server
+      // action re-checks before writing the row.
       if (file.size > MAX_UPLOAD_BYTES) {
         setError(`"${file.name}" is larger than 20 MB.`);
         continue;
       }
+      if (!isAllowedMimeType(file.type)) {
+        setError(`"${file.name}" is not a supported type. Use ${ALLOWED_TYPES_LABEL}.`);
+        continue;
+      }
 
-      // Keep the original name readable but make the path collision-proof.
-      const safeName = file.name.replace(/[^\w.\-() ]+/g, '_');
-      const path = `${applicationId}/${itemId}/${Date.now()}-${safeName}`;
+      const path = `${applicationId}/${itemId}/${Date.now()}-${sanitiseFileName(file.name)}`;
 
       const { error: uploadError } = await supabase.storage
-        .from('visa-documents')
-        .upload(path, file, { contentType: file.type || undefined, upsert: false });
+        .from(BUCKET)
+        .upload(path, file, { contentType: file.type, upsert: false });
 
       if (uploadError) {
         setError(`Could not upload "${file.name}": ${uploadError.message}`);
         continue;
       }
 
-      const { error: rowError } = await supabase.from('documents').insert({
-        application_item_id: entryId,
-        storage_path: path,
-        file_name: file.name,
-        mime_type: file.type || null,
-        size_bytes: file.size,
+      // The row is written server-side, where the path is verified against the
+      // folder for this item. The browser never gets to choose where a
+      // documents row points.
+      const result = await recordDocument({
+        entryId,
+        storagePath: path,
+        fileName: file.name,
+        mimeType: file.type,
+        sizeBytes: file.size,
       });
 
-      if (rowError) {
+      if (result.error) {
         // Don't leave the object behind with no row pointing at it.
-        await supabase.storage.from('visa-documents').remove([path]);
-        setError(`Could not record "${file.name}": ${rowError.message}`);
+        await supabase.storage.from(BUCKET).remove([path]);
+        setError(`Could not record "${file.name}": ${result.error}`);
         continue;
       }
 
@@ -221,13 +233,14 @@ export function ItemDetail({
               </button>
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              PDF, JPEG, PNG, GIF or WebP can be reviewed automatically. Up to 20 MB each.
+              {ALLOWED_TYPES_LABEL} only. Up to 20 MB each.
             </p>
             <input
               ref={fileInput}
               type="file"
               multiple
               hidden
+              accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,application/pdf,image/jpeg,image/png,image/gif,image/webp"
               onChange={(e) => void upload(e.target.files)}
             />
             {uploading && (

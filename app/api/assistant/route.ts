@@ -8,6 +8,7 @@ import { NextResponse } from 'next/server';
 import { anthropic, CHAT_MODEL, NOT_ADVICE_RULE, textOf } from '@/lib/ai';
 import { buildGroundingContext } from '@/lib/ai-context';
 import { getApplication, getChecklistEntries } from '@/lib/queries';
+import { consumeRateLimit, rateLimitMessage } from '@/lib/rate-limit';
 import { createClient } from '@/lib/supabase/server';
 
 export const maxDuration = 60;
@@ -22,6 +23,11 @@ export async function POST(req: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
+
+  // Bounded per user, counted in the database. Fails closed.
+  if (!(await consumeRateLimit('assistant'))) {
+    return NextResponse.json({ error: rateLimitMessage('assistant') }, { status: 429 });
+  }
 
   const body = await req.json().catch(() => null);
   const question = typeof body?.question === 'string' ? body.question.trim() : '';

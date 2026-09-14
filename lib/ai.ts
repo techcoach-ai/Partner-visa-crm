@@ -8,7 +8,7 @@ import Anthropic from '@anthropic-ai/sdk';
 export const REVIEW_MODEL = 'claude-opus-5';
 export const CHAT_MODEL = 'claude-sonnet-5';
 
-export const BUCKET = 'visa-documents';
+export { BUCKET } from '@/lib/storage';
 
 /** Media types the Anthropic API accepts as image blocks. */
 export const SUPPORTED_IMAGE_TYPES = [

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { BUCKET } from '@/lib/storage';
 import type { ItemStatus } from '@/lib/types';
 
 const VALID_STATUSES: ItemStatus[] = [
@@ -12,19 +13,64 @@ const VALID_STATUSES: ItemStatus[] = [
   'not_applicable',
 ];
 
-/** RLS scopes the update to the caller's own rows; no ownership check needed here. */
-export async function setItemStatus(entryId: string, status: ItemStatus) {
-  if (!VALID_STATUSES.includes(status)) {
-    return { error: 'Unknown status.' };
-  }
+const MAX_NOTES_CHARS = 5000;
 
+type ActionResult = { error?: string };
+
+/**
+ * Server Actions are publicly reachable POST endpoints, so each one
+ * authenticates before touching the database. RLS is still the boundary that
+ * enforces ownership — this is the layer in front of it, so an unauthenticated
+ * or non-owning caller is rejected here rather than silently denied downstream.
+ */
+async function requireUserClient() {
   const supabase = createClient();
-  const { error } = await supabase
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return { supabase, user };
+}
+
+/**
+ * Confirms the checklist row belongs to the caller and returns its application
+ * and template item ids. RLS scopes the select, so a row that comes back is by
+ * definition theirs; a row that does not is indistinguishable from one that
+ * does not exist, which is the correct thing to tell the caller.
+ */
+async function loadOwnedEntry(
+  supabase: ReturnType<typeof createClient>,
+  entryId: string,
+) {
+  const { data } = await supabase
+    .from('application_items')
+    .select('id, application_id, item_id')
+    .eq('id', entryId)
+    .maybeSingle();
+  return data as { id: string; application_id: string; item_id: string } | null;
+}
+
+export async function setItemStatus(
+  entryId: string,
+  status: ItemStatus,
+): Promise<ActionResult> {
+  if (!VALID_STATUSES.includes(status)) return { error: 'Unknown status.' };
+
+  const { supabase, user } = await requireUserClient();
+  if (!user) return { error: 'Not signed in.' };
+
+  const entry = await loadOwnedEntry(supabase, entryId);
+  if (!entry) return { error: 'Item not found.' };
+
+  // Select back the id: a PostgREST update matching zero rows returns no error,
+  // so without this an RLS denial would be reported to the caller as success.
+  const { data, error } = await supabase
     .from('application_items')
     .update({ status })
-    .eq('id', entryId);
+    .eq('id', entryId)
+    .select('id');
 
-  if (error) return { error: error.message };
+  if (error) return { error: 'Could not update this item.' };
+  if (!data || data.length === 0) return { error: 'Item not found.' };
 
   revalidatePath('/checklist');
   revalidatePath(`/checklist/${entryId}`);
@@ -32,43 +78,113 @@ export async function setItemStatus(entryId: string, status: ItemStatus) {
   return {};
 }
 
-export async function setItemNotes(entryId: string, notes: string) {
-  const supabase = createClient();
-  const { error } = await supabase
+export async function setItemNotes(
+  entryId: string,
+  notes: string,
+): Promise<ActionResult> {
+  if (notes.length > MAX_NOTES_CHARS) return { error: 'Those notes are too long.' };
+
+  const { supabase, user } = await requireUserClient();
+  if (!user) return { error: 'Not signed in.' };
+
+  const entry = await loadOwnedEntry(supabase, entryId);
+  if (!entry) return { error: 'Item not found.' };
+
+  const { data, error } = await supabase
     .from('application_items')
     .update({ notes: notes.trim() || null })
-    .eq('id', entryId);
+    .eq('id', entryId)
+    .select('id');
 
-  if (error) return { error: error.message };
+  if (error) return { error: 'Could not save your notes.' };
+  if (!data || data.length === 0) return { error: 'Item not found.' };
 
   revalidatePath(`/checklist/${entryId}`);
   return {};
 }
 
-/** Deletes a document row and its stored file. */
-export async function deleteDocument(documentId: string) {
-  const supabase = createClient();
+/**
+ * Records an uploaded file against a checklist item.
+ *
+ * The browser uploads the bytes directly to Storage — proxying 20 MB through a
+ * function would be wasteful — but the database row is written here, where the
+ * path can be checked. The caller supplies a path; this verifies it sits under
+ * the folder for an item the caller owns, so a row can never be made to point
+ * at another user's file. The database trigger enforces the same rule, so the
+ * two are independent.
+ */
+export async function recordDocument(input: {
+  entryId: string;
+  storagePath: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+}): Promise<ActionResult & { documentId?: string }> {
+  const { supabase, user } = await requireUserClient();
+  if (!user) return { error: 'Not signed in.' };
 
+  const entry = await loadOwnedEntry(supabase, input.entryId);
+  if (!entry) return { error: 'Item not found.' };
+
+  const expectedPrefix = `${entry.application_id}/${entry.item_id}/`;
+  if (!input.storagePath.startsWith(expectedPrefix)) {
+    return { error: 'That file path is not valid for this item.' };
+  }
+
+  const { data, error } = await supabase
+    .from('documents')
+    .insert({
+      application_item_id: entry.id,
+      storage_path: input.storagePath,
+      file_name: input.fileName.slice(0, 255),
+      mime_type: input.mimeType || null,
+      size_bytes: input.sizeBytes,
+    })
+    .select('id')
+    .single();
+
+  if (error || !data) return { error: 'Could not record this document.' };
+
+  revalidatePath(`/checklist/${input.entryId}`);
+  revalidatePath('/checklist');
+  revalidatePath('/documents');
+  revalidatePath('/dashboard');
+  return { documentId: data.id as string };
+}
+
+/** Deletes a document row and its stored object. */
+export async function deleteDocument(documentId: string): Promise<ActionResult> {
+  const { supabase, user } = await requireUserClient();
+  if (!user) return { error: 'Not signed in.' };
+
+  // RLS scopes this select, so getting a row back proves ownership.
   const { data: doc } = await supabase
     .from('documents')
     .select('id, storage_path, application_item_id')
     .eq('id', documentId)
-    .single();
+    .maybeSingle();
 
   if (!doc) return { error: 'Document not found.' };
 
-  // Remove the object first. If the row went first and this failed, the file
-  // would be orphaned in the bucket with nothing pointing at it.
+  // Remove the object first: if the row went first and this failed, the file
+  // would remain in the bucket with nothing pointing at it.
   const { error: storageError } = await supabase.storage
-    .from('visa-documents')
-    .remove([doc.storage_path]);
-  if (storageError) return { error: storageError.message };
+    .from(BUCKET)
+    .remove([doc.storage_path as string]);
+  if (storageError) return { error: 'Could not delete the stored file.' };
 
-  const { error } = await supabase.from('documents').delete().eq('id', documentId);
-  if (error) return { error: error.message };
+  const { data: deleted, error } = await supabase
+    .from('documents')
+    .delete()
+    .eq('id', documentId)
+    .select('id');
+
+  if (error) return { error: 'Could not delete this document.' };
+  if (!deleted || deleted.length === 0) return { error: 'Document not found.' };
 
   revalidatePath(`/checklist/${doc.application_item_id}`);
   revalidatePath('/checklist');
+  revalidatePath('/documents');
   revalidatePath('/dashboard');
   return {};
 }

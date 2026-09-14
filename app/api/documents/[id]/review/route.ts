@@ -16,6 +16,7 @@ import {
   SUPPORTED_IMAGE_TYPES,
   textOf,
 } from '@/lib/ai';
+import { consumeRateLimit, rateLimitMessage } from '@/lib/rate-limit';
 import { createClient } from '@/lib/supabase/server';
 import type { AiVerdict } from '@/lib/types';
 
@@ -69,6 +70,11 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
+
+  // Bounded per user, counted in the database. Fails closed.
+  if (!(await consumeRateLimit('review'))) {
+    return NextResponse.json({ error: rateLimitMessage('review') }, { status: 429 });
+  }
 
   // 1) Load the document + its requirement (RLS ensures the user owns it).
   const { data: doc, error } = await supabase

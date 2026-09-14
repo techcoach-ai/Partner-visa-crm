@@ -5,7 +5,7 @@
  * what proves the caller owns the file before a link is minted.
  */
 import { NextResponse } from 'next/server';
-import { BUCKET } from '@/lib/ai';
+import { BUCKET } from '@/lib/storage';
 import { createClient } from '@/lib/supabase/server';
 
 const EXPIRES_SECONDS = 60;
@@ -34,5 +34,9 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     return NextResponse.json({ error: 'Could not create link' }, { status: 500 });
   }
 
-  return NextResponse.json({ url: data.signedUrl, expiresIn: EXPIRES_SECONDS });
+  // Never let a shared cache or proxy retain a link to an identity document.
+  return NextResponse.json(
+    { url: data.signedUrl, expiresIn: EXPIRES_SECONDS },
+    { headers: { 'Cache-Control': 'no-store, max-age=0', Pragma: 'no-cache' } },
+  );
 }

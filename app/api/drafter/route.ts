@@ -8,6 +8,7 @@
 import { NextResponse } from 'next/server';
 import { anthropic, CHAT_MODEL, NOT_ADVICE_RULE, parseJsonObject, textOf } from '@/lib/ai';
 import { getApplication } from '@/lib/queries';
+import { consumeRateLimit, rateLimitMessage } from '@/lib/rate-limit';
 import { createClient } from '@/lib/supabase/server';
 
 export const maxDuration = 120;
@@ -25,6 +26,11 @@ export async function POST(req: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
+
+  // Bounded per user, counted in the database. Fails closed.
+  if (!(await consumeRateLimit('drafter'))) {
+    return NextResponse.json({ error: rateLimitMessage('drafter') }, { status: 429 });
+  }
 
   const body = await req.json().catch(() => null);
   const timeline = typeof body?.timeline === 'string' ? body.timeline.trim() : '';
