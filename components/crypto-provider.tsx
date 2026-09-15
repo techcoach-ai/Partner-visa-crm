@@ -7,6 +7,7 @@ import {
   classifyCryptoState,
   isCompleteRecord,
   looksLikeMissingTable,
+  looksLikeStaleSchemaCache,
   type CryptoStatus,
   type UserCryptoRecord,
 } from '@/lib/crypto-state';
@@ -39,6 +40,29 @@ export function useDocumentCrypto() {
   const ctx = React.useContext(CryptoContext);
   if (!ctx) throw new Error('useDocumentCrypto must be used within CryptoProvider');
   return ctx;
+}
+
+/**
+ * Turns a failed read of user_crypto into something the reader can act on.
+ * The stale-cache case is called out separately: it looks identical to a
+ * missing table from the client, but re-running the migration does nothing.
+ */
+function describeLoadError(error: { code?: string | null; message?: string | null }): string {
+  if (looksLikeStaleSchemaCache(error)) {
+    return (
+      'The database has the encryption tables, but the API has not picked them up yet. ' +
+      "Run `notify pgrst, 'reload schema';` in the Supabase SQL editor, or restart the " +
+      'project under Settings → General, then reload this page.'
+    );
+  }
+  if (looksLikeMissingTable(error)) {
+    return (
+      'Document encryption is not installed on this database yet. Run ' +
+      'migrations/000-catch-up-run-this-first.sql in the Supabase SQL editor.'
+    );
+  }
+  const detail = error.message ? ` (${error.message})` : '';
+  return `Could not load your encryption settings${detail}. Check your connection and try again.`;
 }
 
 export function CryptoProvider({ children }: { children: React.ReactNode }) {
@@ -86,11 +110,7 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
       // on an unlock form they cannot possibly complete.
       setLoadFailed(true);
       setRecord(null);
-      setError(
-        looksLikeMissingTable(loadError)
-          ? 'Document encryption is not installed on this database yet. Run migrations/2026-09-14-e2e-encryption.sql in the Supabase SQL editor.'
-          : 'Could not load your encryption settings. Check your connection and try again.',
-      );
+      setError(describeLoadError(loadError));
       setLoaded(true);
       return;
     }

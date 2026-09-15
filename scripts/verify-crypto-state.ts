@@ -12,6 +12,7 @@ import {
   classifyCryptoState,
   isCompleteRecord,
   looksLikeMissingTable,
+  looksLikeStaleSchemaCache,
   type CryptoFacts,
 } from '../lib/crypto-state';
 
@@ -99,13 +100,27 @@ check("INVARIANT: 'locked' is unreachable without a complete record", !lockedWit
 
 // ── Missing-table detection, so the message is actionable ────────────────────
 check('undefined_table detected', looksLikeMissingTable({ code: '42P01', message: null }));
-check('PostgREST schema-cache miss detected',
-  looksLikeMissingTable({ code: 'PGRST205', message: "Could not find the table 'public.user_crypto'" }));
+// A schema-cache miss is deliberately NOT a missing table: the table exists and
+// re-running the migration would change nothing.
+check('PostgREST schema-cache miss is routed to the cache case, not the migration case',
+  looksLikeStaleSchemaCache({ code: 'PGRST205', message: "Could not find the table 'public.user_crypto'" }) &&
+  !looksLikeMissingTable({ code: 'PGRST205', message: "Could not find the table 'public.user_crypto'" }));
 check('message-only detection works',
   looksLikeMissingTable({ code: null, message: 'relation "user_crypto" does not exist' }));
 check('an ordinary error is not mistaken for a missing table',
   !looksLikeMissingTable({ code: '500', message: 'network timeout' }));
 check('null error is not a missing table', !looksLikeMissingTable(null));
+
+// ── Stale cache vs genuinely missing: opposite remedies, must not be confused ─
+const staleCache = { code: 'PGRST205', message: "Could not find the table 'public.user_crypto' in the schema cache" };
+check('PGRST205 is a stale cache', looksLikeStaleSchemaCache(staleCache));
+check('PGRST205 is NOT reported as a missing table', !looksLikeMissingTable(staleCache));
+const reallyMissing = { code: '42P01', message: 'relation "user_crypto" does not exist' };
+check('42P01 is a missing table', looksLikeMissingTable(reallyMissing));
+check('42P01 is NOT reported as a stale cache', !looksLikeStaleSchemaCache(reallyMissing));
+check('a permission error is neither',
+  !looksLikeMissingTable({ code: '42501', message: 'permission denied for table user_crypto' }) &&
+  !looksLikeStaleSchemaCache({ code: '42501', message: 'permission denied for table user_crypto' }));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

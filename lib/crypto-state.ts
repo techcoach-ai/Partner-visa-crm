@@ -72,23 +72,37 @@ export function classifyCryptoState(facts: CryptoFacts): CryptoStatus {
   return 'unlocked';
 }
 
-/**
- * True when a Postgres/PostgREST error means the table or column is missing
- * rather than something transient — almost always a migration that has not been
- * run. Worth separating, because the fix is a deployment step, not a retry.
- */
-export function looksLikeMissingTable(error: {
+interface PgError {
   code?: string | null;
   message?: string | null;
-} | null): boolean {
+}
+
+/**
+ * True when PostgREST cannot see the table but Postgres has it — the REST layer
+ * caches the schema and does not pick up a new table until told to reload.
+ *
+ * Separated from a genuinely missing table because the remedies are opposite:
+ * this one is fixed with `notify pgrst, 'reload schema'`, and telling someone to
+ * re-run a migration they have already run sends them in a circle.
+ */
+export function looksLikeStaleSchemaCache(error: PgError | null): boolean {
   if (!error) return false;
-  // 42P01 undefined_table, 42703 undefined_column, PGRST20x schema-cache misses.
   const code = error.code ?? '';
-  if (['42P01', '42703', 'PGRST202', 'PGRST204', 'PGRST205'].includes(code)) return true;
+  if (['PGRST202', 'PGRST204', 'PGRST205'].includes(code)) return true;
   const message = (error.message ?? '').toLowerCase();
-  return (
-    message.includes('does not exist') ||
-    message.includes('could not find the table') ||
-    message.includes('schema cache')
-  );
+  return message.includes('schema cache');
+}
+
+/**
+ * True when the table or column genuinely does not exist in Postgres — a
+ * migration that has not been run. The fix is a deployment step, not a retry.
+ */
+export function looksLikeMissingTable(error: PgError | null): boolean {
+  if (!error) return false;
+  if (looksLikeStaleSchemaCache(error)) return false;
+  // 42P01 undefined_table, 42703 undefined_column.
+  const code = error.code ?? '';
+  if (['42P01', '42703'].includes(code)) return true;
+  const message = (error.message ?? '').toLowerCase();
+  return message.includes('does not exist') || message.includes('could not find the table');
 }
