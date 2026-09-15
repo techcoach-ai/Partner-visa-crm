@@ -28,14 +28,31 @@ on conflict (id) do update set
   file_size_limit = excluded.file_size_limit,
   allowed_mime_types = excluded.allowed_mime_types;
 
--- H7: never assume the platform default. If RLS were off, the policy below
--- would exist and be silently inert, exposing every document in the bucket.
-alter table storage.objects enable row level security;
+-- Assert, rather than set, that RLS is on for storage.objects.
+--
+-- "alter table storage.objects enable row level security" cannot run here:
+-- the table is owned by supabase_storage_admin and the SQL editor runs as
+-- postgres, so it fails with 42501 "must be owner of table objects".
+--
+-- Supabase enables RLS on storage.objects by default, so this reads pg_class
+-- (which needs no ownership) and fails loudly if that is ever not true. The
+-- bucket policy below would otherwise exist and be silently inert, leaving
+-- every document readable by any authenticated user.
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'storage'
+      and c.relname = 'objects'
+      and c.relrowsecurity
+  ) then
+    raise exception
+      'Row level security is OFF on storage.objects. Turn it on before using this app (Supabase dashboard -> Storage -> Policies), otherwise the visa-documents policy is inert and every document is readable by any signed-in user.';
+  end if;
+end $$;
 
-
--- H7: never assume the platform default. If RLS were off, the bucket policy
--- would exist and be silently inert.
-alter table storage.objects enable row level security;
 
 -- ── Rate limiting (H3, H4) ───────────────────────────────────────────────────
 -- Per-user counters held in the database rather than in process memory, because

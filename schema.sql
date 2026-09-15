@@ -130,30 +130,63 @@ on conflict (id) do update set
   file_size_limit = excluded.file_size_limit,
   allowed_mime_types = excluded.allowed_mime_types;
 
--- H7: never assume the platform default. If RLS were off, the policy below
--- would exist and be silently inert, exposing every document in the bucket.
-alter table storage.objects enable row level security;
+-- ── Storage object policy and RLS ───────────────────────────────────────────
+-- storage.objects is owned by supabase_storage_admin. Depending on the project,
+-- the SQL editor's role may not own it, in which case both "alter table ...
+-- enable row level security" and "create policy ... on storage.objects" fail
+-- with 42501 "must be owner of table objects".
+--
+-- That must not abort the rest of this script, so both are attempted here and
+-- downgraded to a warning if refused. If you see the warning, create the policy
+-- from the Supabase Dashboard instead: Storage -> visa-documents -> Policies.
+-- Until it exists, the bucket is still private, but a signed-in user could read
+-- another user's object if they learned its path.
+do $$
+begin
+  begin
+    execute $p$drop policy if exists "own visa documents" on storage.objects$p$;
+    execute $p$
+      create policy "own visa documents" on storage.objects
+        for all
+        using (
+          bucket_id = 'visa-documents'
+          and exists (
+            select 1 from applications a
+            where a.id = ((storage.foldername(name))[1])::uuid
+              and a.owner_id = auth.uid()
+          )
+        )
+        with check (
+          bucket_id = 'visa-documents'
+          and exists (
+            select 1 from applications a
+            where a.id = ((storage.foldername(name))[1])::uuid
+              and a.owner_id = auth.uid()
+          )
+        )
+    $p$;
+    raise notice 'storage.objects policy "own visa documents" created.';
+  exception
+    when insufficient_privilege then
+      raise warning 'SKIPPED: could not create the storage policy (not the owner of storage.objects). Create it from the Dashboard: Storage -> visa-documents -> Policies.';
+  end;
+end $$;
 
--- Path convention: {application_id}/{item_id}/{filename}
--- First folder segment = application_id, which must be owned by the user.
-create policy "own visa documents" on storage.objects
-  for all
-  using (
-    bucket_id = 'visa-documents'
-    and exists (
-      select 1 from applications a
-      where a.id = ((storage.foldername(name))[1])::uuid
-        and a.owner_id = auth.uid()
-    )
-  )
-  with check (
-    bucket_id = 'visa-documents'
-    and exists (
-      select 1 from applications a
-      where a.id = ((storage.foldername(name))[1])::uuid
-        and a.owner_id = auth.uid()
-    )
-  );
+-- Row level security on storage.objects. Supabase enables this by default; it
+-- cannot be set from here without ownership, so it is checked and reported.
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'storage' and c.relname = 'objects' and c.relrowsecurity
+  ) then
+    raise warning 'Row level security is OFF on storage.objects. Turn it on in the Supabase Dashboard before uploading anything: without it the bucket policy is inert and every document is readable by any signed-in user.';
+  else
+    raise notice 'storage.objects row level security: on.';
+  end if;
+end $$;
 
 -- ── Helper: instantiate a fresh checklist for a new application ────────────
 create or replace function seed_application_items(app_id uuid)

@@ -38,14 +38,271 @@ on conflict (id) do update set
   file_size_limit = excluded.file_size_limit,
   allowed_mime_types = excluded.allowed_mime_types;
 
--- H7: never assume the platform default. If RLS were off, the policy below
--- would exist and be silently inert, exposing every document in the bucket.
-alter table storage.objects enable row level security;
+-- ── Storage object policy and RLS ───────────────────────────────────────────
+-- storage.objects is owned by supabase_storage_admin. Depending on the project,
+-- the SQL editor's role may not own it, in which case both "alter table ...
+-- enable row level security" and "create policy ... on storage.objects" fail
+-- with 42501 "must be owner of table objects".
+--
+-- That must not abort the rest of this script, so both are attempted here and
+-- downgraded to a warning if refused. If you see the warning, create the policy
+-- from the Supabase Dashboard instead: Storage -> visa-documents -> Policies.
+-- Until it exists, the bucket is still private, but a signed-in user could read
+-- another user's object if they learned its path.
+do $$
+begin
+  begin
+    execute $p$drop policy if exists "own visa documents" on storage.objects$p$;
+    execute $p$
+      create policy "own visa documents" on storage.objects
+        for all
+        using (
+          bucket_id = 'visa-documents'
+          and exists (
+            select 1 from applications a
+            where a.id = ((storage.foldername(name))[1])::uuid
+              and a.owner_id = auth.uid()
+          )
+        )
+        with check (
+          bucket_id = 'visa-documents'
+          and exists (
+            select 1 from applications a
+            where a.id = ((storage.foldername(name))[1])::uuid
+              and a.owner_id = auth.uid()
+          )
+        )
+    $p$;
+    raise notice 'storage.objects policy "own visa documents" created.';
+  exception
+    when insufficient_privilege then
+      raise warning 'SKIPPED: could not create the storage policy (not the owner of storage.objects). Create it from the Dashboard: Storage -> visa-documents -> Policies.';
+  end;
+end $$;
 
+-- Row level security on storage.objects. Supabase enables this by default; it
+-- cannot be set from here without ownership, so it is checked and reported.
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'storage' and c.relname = 'objects' and c.relrowsecurity
+  ) then
+    raise warning 'Row level security is OFF on storage.objects. Turn it on in the Supabase Dashboard before uploading anything: without it the bucket policy is inert and every document is readable by any signed-in user.';
+  else
+    raise notice 'storage.objects row level security: on.';
+  end if;
+end $$;
 
--- H7: never assume the platform default. If RLS were off, the bucket policy
--- would exist and be silently inert.
-alter table storage.objects enable row level security;
+-- ────────────────────────────────────────────────────────────────────────────
+-- Repair: objects defined after the storage policy in the original schema.sql
+-- ────────────────────────────────────────────────────────────────────────────
+-- If the storage policy failed with 42501 when schema.sql was first run, the
+-- SQL editor aborted there and everything below it was never created. These are
+-- all idempotent, so they are simply reapplied.
+
+-- ── Helper: instantiate a fresh checklist for a new application ────────────
+create or replace function seed_application_items(app_id uuid)
+returns void language sql as $$
+  insert into application_items (application_id, item_id)
+  select app_id, ci.id from checklist_items ci
+  on conflict (application_id, item_id) do nothing;
+$$;
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ADDED BY THE BUILD — everything above this line is unchanged.
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ── Profiles: records disclaimer acceptance at signup ─────────────────────
+-- The brief requires the "not migration advice" disclaimer to be accepted at
+-- signup with the timestamp stored. There was nowhere to put it, so:
+--
+-- The row is created by a trigger on auth.users at the moment of signup, and
+-- the timestamp is stamped server-side with now() — never sent by the client.
+-- There is deliberately NO update policy, so a user can read their acceptance
+-- record but cannot alter or erase it. That is what makes it usable as an
+-- actual record of consent rather than a self-reported claim.
+create table if not exists profiles (
+  id                     uuid primary key references auth.users(id) on delete cascade,
+  email                  text,
+  disclaimer_accepted_at timestamptz,
+  disclaimer_version     text,
+  created_at             timestamptz not null default now()
+);
+
+alter table profiles enable row level security;
+
+-- Read-only to the owner. No insert/update/delete policy: the trigger below
+-- writes the row, and nothing else may change it.
+drop policy if exists "own profile - read" on profiles;
+create policy "own profile - read" on profiles
+  for select using (id = auth.uid());
+
+create or replace function handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles (id, email, disclaimer_accepted_at, disclaimer_version)
+  values (
+    new.id,
+    new.email,
+    -- Stamped server-side. The client can only assert that it accepted; it
+    -- cannot choose the time.
+    case
+      when new.raw_user_meta_data->>'disclaimer_accepted' = 'true' then now()
+      else null
+    end,
+    new.raw_user_meta_data->>'disclaimer_version'
+  )
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function handle_new_user();
+
+-- ── Indexes ───────────────────────────────────────────────────────────────
+-- Postgres does not index foreign keys automatically, and every RLS policy
+-- above runs an EXISTS subquery across these columns on every row touched.
+-- Without these, each query degrades as the table grows.
+create index if not exists applications_owner_id_idx        on applications (owner_id);
+create index if not exists application_items_app_id_idx     on application_items (application_id);
+create index if not exists application_items_item_id_idx    on application_items (item_id);
+create index if not exists documents_app_item_id_idx        on documents (application_item_id);
+create index if not exists ai_messages_app_id_created_idx   on ai_messages (application_id, created_at);
+create index if not exists checklist_items_category_id_idx  on checklist_items (category_id);
+
+-- ── Keep updated_at honest ────────────────────────────────────────────────
+-- Both tables default updated_at to now() but nothing ever moves it.
+create or replace function touch_updated_at()
+returns trigger language plpgsql as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists applications_touch_updated_at on applications;
+create trigger applications_touch_updated_at
+  before update on applications
+  for each row execute function touch_updated_at();
+
+drop trigger if exists application_items_touch_updated_at on application_items;
+create trigger application_items_touch_updated_at
+  before update on application_items
+  for each row execute function touch_updated_at();
+
+-- ── Rate limiting (H3, H4) ───────────────────────────────────────────────────
+-- Per-user counters held in the database rather than in process memory, because
+-- serverless instances do not share memory and an in-memory limiter is trivially
+-- bypassed by spreading requests across cold starts.
+create table if not exists rate_limits (
+  user_id      uuid not null references auth.users(id) on delete cascade,
+  action       text not null,
+  window_start timestamptz not null,
+  count        int not null default 0,
+  primary key (user_id, action, window_start)
+);
+
+alter table rate_limits enable row level security;
+-- No policy at all: this table is written only by the SECURITY DEFINER function
+-- below. Users must not be able to read, reset or forge their own counters.
+
+create index if not exists rate_limits_window_idx on rate_limits (window_start);
+
+/*
+ * Consumes one unit of quota for the calling user. Returns true when the call
+ * is allowed, false when the limit is exhausted.
+ *
+ * SECURITY DEFINER so it can write to a table the caller cannot touch, with
+ * auth.uid() taken from the session rather than from an argument — a caller
+ * cannot spend, inspect or reset anyone else's quota, including their own.
+ */
+create or replace function consume_rate_limit(
+  p_action text,
+  p_limit int,
+  p_window_seconds int
+) returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user uuid := auth.uid();
+  v_window timestamptz;
+  v_count int;
+begin
+  if v_user is null then
+    return false;  -- unauthenticated callers get no quota
+  end if;
+
+  -- Fixed window, bucketed by truncating epoch seconds.
+  v_window := to_timestamp(
+    floor(extract(epoch from now()) / p_window_seconds) * p_window_seconds
+  );
+
+  insert into rate_limits (user_id, action, window_start, count)
+  values (v_user, p_action, v_window, 1)
+  on conflict (user_id, action, window_start)
+    do update set count = rate_limits.count + 1
+  returning count into v_count;
+
+  -- Opportunistic cleanup of windows nothing will read again.
+  delete from rate_limits where window_start < now() - interval '1 day';
+
+  return v_count <= p_limit;
+end;
+$$;
+
+revoke all on function consume_rate_limit(text, int, int) from public;
+grant execute on function consume_rate_limit(text, int, int) to authenticated;
+
+-- ── Document path integrity (H2) ─────────────────────────────────────────────
+-- storage_path is written by the browser. RLS validates application_item_id but
+-- treats the path as opaque, so a user could point their own row at another
+-- user's file. The storage policy blocks the read, but nothing in the database
+-- stopped the row existing. This trigger makes the row itself impossible.
+create or replace function enforce_document_path()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_expected_prefix text;
+begin
+  select a.id || '/' || ai.item_id || '/'
+    into v_expected_prefix
+  from application_items ai
+  join applications a on a.id = ai.application_id
+  where ai.id = new.application_item_id;
+
+  if v_expected_prefix is null then
+    raise exception 'documents.application_item_id % does not exist', new.application_item_id;
+  end if;
+
+  if position(v_expected_prefix in new.storage_path) <> 1 then
+    raise exception 'storage_path must begin with %', v_expected_prefix
+      using errcode = 'check_violation';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists documents_enforce_path on documents;
+create trigger documents_enforce_path
+  before insert or update of storage_path, application_item_id on documents
+  for each row execute function enforce_document_path();
+
 
 -- ── Rate limiting (H3, H4) ───────────────────────────────────────────────────
 -- Per-user counters held in the database rather than in process memory, because
