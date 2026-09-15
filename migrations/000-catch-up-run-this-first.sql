@@ -99,9 +99,11 @@ end $$;
 -- ────────────────────────────────────────────────────────────────────────────
 -- Repair: objects defined after the storage policy in the original schema.sql
 -- ────────────────────────────────────────────────────────────────────────────
--- If the storage policy failed with 42501 when schema.sql was first run, the
--- SQL editor aborted there and everything below it was never created. These are
--- all idempotent, so they are simply reapplied.
+-- Reapplied defensively. On Supabase, "create policy ... on storage.objects"
+-- does work from the SQL editor even though "alter table ... enable row level
+-- security" does not, so schema.sql normally runs to completion and these
+-- already exist. On a stricter Postgres the create policy would abort the run
+-- and everything below it would be missing. All idempotent either way.
 
 -- ── Helper: instantiate a fresh checklist for a new application ────────────
 create or replace function seed_application_items(app_id uuid)
