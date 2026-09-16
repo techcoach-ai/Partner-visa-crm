@@ -37,7 +37,9 @@ export function CryptoErrorNotice() {
       <ShieldAlert className="h-4 w-4" />
       <AlertTitle>Could not check your encryption settings</AlertTitle>
       <AlertDescription>
-        <p>{error ?? 'Something went wrong reading your encryption settings.'}</p>
+        <p className="whitespace-pre-wrap break-words">
+          {error ?? 'Something went wrong reading your encryption settings.'}
+        </p>
         <Button
           variant="outline"
           size="sm"

@@ -44,25 +44,40 @@ export function useDocumentCrypto() {
 
 /**
  * Turns a failed read of user_crypto into something the reader can act on.
- * The stale-cache case is called out separately: it looks identical to a
- * missing table from the client, but re-running the migration does nothing.
+ *
+ * The raw code and message are ALWAYS appended, and so is the project this
+ * build is pointed at. Summarising the error and hiding the original cost
+ * several rounds of guessing: "not installed" and "the API cannot see it yet"
+ * look identical from here, and so does "you are looking at a different
+ * project from the one you ran the SQL in". The Supabase URL is public by
+ * design — it ships in the browser bundle — so showing it reveals nothing.
  */
 function describeLoadError(error: { code?: string | null; message?: string | null }): string {
+  const project = (() => {
+    try {
+      return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').host;
+    } catch {
+      return 'unknown project';
+    }
+  })();
+
+  const raw = `[${error.code ?? 'no code'}] ${error.message ?? 'no message'} — project: ${project}`;
+
   if (looksLikeStaleSchemaCache(error)) {
     return (
       'The database has the encryption tables, but the API has not picked them up yet. ' +
       "Run `notify pgrst, 'reload schema';` in the Supabase SQL editor, or restart the " +
-      'project under Settings → General, then reload this page.'
+      `project under Settings → General, then reload this page.\n\n${raw}`
     );
   }
   if (looksLikeMissingTable(error)) {
     return (
-      'Document encryption is not installed on this database yet. Run ' +
-      'migrations/000-catch-up-run-this-first.sql in the Supabase SQL editor.'
+      'The API reports that user_crypto does not exist. If you have already run the ' +
+      'migration, check that this project is the same one you ran it in, and that the ' +
+      `table is in the public schema.\n\n${raw}`
     );
   }
-  const detail = error.message ? ` (${error.message})` : '';
-  return `Could not load your encryption settings${detail}. Check your connection and try again.`;
+  return `Could not load your encryption settings.\n\n${raw}`;
 }
 
 export function CryptoProvider({ children }: { children: React.ReactNode }) {
