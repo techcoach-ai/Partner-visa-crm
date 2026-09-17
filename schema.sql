@@ -405,6 +405,33 @@ create table if not exists user_crypto (
   created_at  timestamptz not null default now()
 );
 
+-- "create table if not exists" does NOTHING when the name is already taken —
+-- it does not reconcile columns. A table left over from an earlier shape would
+-- silently survive, and the app would fail with 42703 (undefined_column) on a
+-- table that plainly exists. So every column is added explicitly as well.
+--
+-- Added nullable, because a NOT NULL column cannot be added to a table that
+-- already has rows. The constraint below then enforces completeness, and any
+-- row that predates a column is deleted first: without a salt or iteration
+-- count it can derive no key, so it is not data, it is an obstacle.
+alter table user_crypto add column if not exists salt text;
+alter table user_crypto add column if not exists iterations int;
+alter table user_crypto add column if not exists verifier_iv text;
+alter table user_crypto add column if not exists verifier_ct text;
+alter table user_crypto add column if not exists created_at timestamptz not null default now();
+
+delete from user_crypto
+where salt is null or iterations is null
+   or verifier_iv is null or verifier_ct is null;
+
+do $$
+begin
+  execute 'alter table user_crypto alter column salt set not null';
+  execute 'alter table user_crypto alter column iterations set not null';
+  execute 'alter table user_crypto alter column verifier_iv set not null';
+  execute 'alter table user_crypto alter column verifier_ct set not null';
+end $$;
+
 alter table user_crypto enable row level security;
 
 drop policy if exists "own crypto - read" on user_crypto;
